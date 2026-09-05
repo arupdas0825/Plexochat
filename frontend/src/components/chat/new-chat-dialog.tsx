@@ -5,6 +5,7 @@ import { Search, UserPlus, Check, X, ShieldAlert } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useConnections } from "@/lib/connections-context";
+import { DiscoverableUser } from "@/lib/explore-calendar-data";
 
 interface NewChatDialogProps {
   isOpen: boolean;
@@ -31,7 +32,7 @@ export function NewChatDialog({
       )
     : [];
 
-  const handleSend = (user: any) => {
+  const handleSend = (user: DiscoverableUser) => {
     sendConnectionRequest(user);
     setSentRequests((prev) => ({ ...prev, [user.id]: true }));
     onRequestSent(user.displayName);

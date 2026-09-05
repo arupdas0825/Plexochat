@@ -39,7 +39,6 @@ import {
   Reply,
   Trash2,
   X,
-  Image as ImageIcon,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -95,7 +94,12 @@ export function ConversationView({
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const [activeContextMenuMsg, setActiveContextMenuMsg] = useState<ChatMessage | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
-  const [localMessages, setLocalMessages] = useState<ChatMessage[]>(thread.messages);
+  const [extraMessages, setExtraMessages] = useState<ChatMessage[]>([]);
+  const [deletedMsgIds, setDeletedMsgIds] = useState<Record<string, boolean>>({});
+
+  const allMessages = React.useMemo(() => {
+    return [...thread.messages, ...extraMessages].filter((m) => !deletedMsgIds[m.id]);
+  }, [thread.messages, extraMessages, deletedMsgIds]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -105,15 +109,10 @@ export function ConversationView({
   const keyboardHeight = useVisualViewport();
   const participant = thread.participant;
 
-  // Sync messages when thread changes
-  useEffect(() => {
-    setLocalMessages(thread.messages);
-  }, [thread.messages]);
-
   // Track scroll position for "New message ↓" pill
   const [isScrolledUp, setIsScrolledUp] = useState(false);
   const [showNewMsgPill, setShowNewMsgPill] = useState(false);
-  const prevMsgCountRef = useRef(localMessages.length);
+  const prevMsgCountRef = useRef(allMessages.length);
 
   const handleScroll = () => {
     if (!scrollContainerRef.current) return;
@@ -135,15 +134,16 @@ export function ConversationView({
 
   // Auto-scroll on initial load or new message
   useEffect(() => {
-    if (localMessages.length > prevMsgCountRef.current) {
+    if (allMessages.length > prevMsgCountRef.current) {
       if (isScrolledUp) {
-        setShowNewMsgPill(true);
+        const timer = setTimeout(() => setShowNewMsgPill(true), 0);
+        return () => clearTimeout(timer);
       } else {
         scrollToBottom(true);
       }
     }
-    prevMsgCountRef.current = localMessages.length;
-  }, [localMessages.length, isScrolledUp, scrollToBottom]);
+    prevMsgCountRef.current = allMessages.length;
+  }, [allMessages.length, isScrolledUp, scrollToBottom]);
 
   // When keyboard opens, scroll to bottom
   useEffect(() => {
@@ -266,7 +266,7 @@ export function ConversationView({
 
   // Delete message
   const handleDeleteMsg = (msgId: string) => {
-    setLocalMessages((prev) => prev.filter((m) => m.id !== msgId));
+    setDeletedMsgIds((prev) => ({ ...prev, [msgId]: true }));
     setActiveContextMenuMsg(null);
   };
 
@@ -291,7 +291,7 @@ export function ConversationView({
         isPhoto: true,
         photoUrl: imageUrl,
       };
-      setLocalMessages((prev) => [...prev, photoMessage]);
+      setExtraMessages((prev) => [...prev, photoMessage]);
       setLightboxImage(imageUrl);
       scrollToBottom(true);
     };
@@ -388,7 +388,7 @@ export function ConversationView({
           <span>Device keys active. Only you &amp; {participant.displayName} can read.</span>
         </div>
 
-        {localMessages.map((msg) => {
+        {allMessages.map((msg) => {
           const isMe = msg.senderId === "me";
           const isOriginalShown = !!revealedMessages[msg.id];
 

@@ -11,7 +11,7 @@
  */
 import React, { useState } from "react";
 import Image from "next/image";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   MessageSquare,
   Users,
@@ -19,8 +19,6 @@ import {
   Plus,
   Search,
   Sparkles,
-  Lock,
-  Globe2,
   BellOff,
   Archive,
   Trash2,

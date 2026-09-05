@@ -26,7 +26,6 @@ import {
   Ban,
   ShieldCheck,
   Send,
-  Sparkles,
   ChevronRight,
   X,
 } from "lucide-react";

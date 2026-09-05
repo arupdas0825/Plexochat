@@ -11,14 +11,11 @@
  */
 import React, { useState } from "react";
 import {
-  User,
   Copy,
   Check,
   Languages,
   ShieldCheck,
-  Moon,
   LogOut,
-  Sliders,
   Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
