@@ -7,7 +7,6 @@ import {
   Users,
   UserCheck,
   UserPlus,
-  ArrowRight,
   MessageSquare,
   Check,
   X,
@@ -15,7 +14,6 @@ import {
   Clock,
   Send,
   Compass,
-  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useConnections } from "@/lib/connections-context";

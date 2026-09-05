@@ -12,7 +12,6 @@ import {
   Calendar,
   Settings,
   LogOut,
-  ShieldCheck,
   Languages,
 } from "lucide-react";
 import { useAuth, SUPPORTED_LANGUAGES } from "@/lib/auth-context";

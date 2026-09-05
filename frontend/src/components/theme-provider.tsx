@@ -32,7 +32,7 @@ export function ThemeProvider({
   useEffect(() => {
     const savedTheme = localStorage.getItem(storageKey) as Theme | null;
     if (savedTheme) {
-      setTheme(savedTheme);
+      queueMicrotask(() => setTheme(savedTheme));
     }
   }, [storageKey]);
 

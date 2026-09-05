@@ -5,12 +5,10 @@ import { useRouter } from "next/navigation";
 import {
   Compass,
   Search,
-  SlidersHorizontal,
   Sparkles,
   Send,
   Check,
   Languages,
-  UserCheck,
   MessageSquare,
   Globe2,
   X,

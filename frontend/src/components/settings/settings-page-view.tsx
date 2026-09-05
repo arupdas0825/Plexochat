@@ -6,17 +6,13 @@ import {
   User,
   Languages,
   ShieldCheck,
-  Eye,
-  MapPin,
   Save,
   Check,
   Copy,
   LogOut,
-  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth, SUPPORTED_LANGUAGES } from "@/lib/auth-context";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 export function SettingsPageView() {
   const { user, updateProfile, logout } = useAuth();

@@ -7,7 +7,7 @@
 import React from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { ShieldCheck, ExternalLink, Code2 } from "lucide-react";
+import { ShieldCheck, ExternalLink } from "lucide-react";
 
 export function LandingFooter() {
   return (

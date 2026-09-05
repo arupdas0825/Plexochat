@@ -5,8 +5,13 @@ import Image from "next/image";
 import { Download, X, Share } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
+
 export function PwaInstallPrompt() {
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
   const [isIos, setIsIos] = useState(false);
   const [showIosInstructions, setShowIosInstructions] = useState(false);
@@ -21,18 +26,18 @@ export function PwaInstallPrompt() {
     // Detect standalone PWA mode (already installed)
     const isStandalone =
       window.matchMedia("(display-mode: standalone)").matches ||
-      (window.navigator as any).standalone === true;
+      (window.navigator as unknown as { standalone?: boolean }).standalone === true;
     if (isStandalone) return;
 
     // Detect iOS
     const userAgent = window.navigator.userAgent.toLowerCase();
     const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
-    setIsIos(isIosDevice);
+    queueMicrotask(() => setIsIos(isIosDevice));
 
     // Android/Chrome beforeinstallprompt
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
-      setDeferredPrompt(e);
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
       // Show subtle prompt after brief usage (3 seconds)
       setTimeout(() => setShowPrompt(true), 3000);
     };

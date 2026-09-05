@@ -6,7 +6,7 @@ import {
   StoredConnectionRequest,
   ConnectedFriend,
 } from "./explore-calendar-data";
-import { useAuth } from "./auth-context";
+import { useAuth, UserProfile } from "./auth-context";
 
 interface ConnectionsContextType {
   exploreUsers: DiscoverableUser[];
@@ -37,9 +37,9 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
       if (storedUsersRaw) {
         const parsedUsers = JSON.parse(storedUsersRaw);
         // Exclude current authenticated user
-        const otherUsers = parsedUsers
-          .filter((u: any) => u.username !== user?.username && u.id !== user?.id && u.isDiscoverable !== false)
-          .map((u: any): DiscoverableUser => {
+        const otherUsers = (parsedUsers as UserProfile[])
+          .filter((u) => u.username !== user?.username && u.id !== user?.id && u.isDiscoverable !== false)
+          .map((u): DiscoverableUser => {
             // Coordinate mapping based on approximate city or country
             return {
               id: u.id,
@@ -49,7 +49,7 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
               city: u.city || "",
               country: u.country || "",
               countryFlag: u.countryFlag || "🌐",
-              mapCoords: u.mapCoords || { x: 50, y: 50 },
+              mapCoords: { x: 50, y: 50 },
               languagesSpoken: u.languagesSpoken || [u.preferredLanguageName || "English"],
               languagesLearning: u.languagesLearning || [],
               interests: u.interests || [],
@@ -59,42 +59,39 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
               matchScore: 85,
             };
           });
-        setExploreUsers(otherUsers);
+        queueMicrotask(() => setExploreUsers(otherUsers));
       } else {
-        setExploreUsers([]);
+        queueMicrotask(() => setExploreUsers([]));
       }
     } catch (e) {
       console.error("Failed to load registered users", e);
-      setExploreUsers([]);
+      queueMicrotask(() => setExploreUsers([]));
     }
   }, [user]);
 
   // Load user-specific connection requests and friends
   useEffect(() => {
     if (!user) {
-      setRequests([]);
-      setConnections([]);
+      queueMicrotask(() => {
+        setRequests([]);
+        setConnections([]);
+      });
       return;
     }
 
     try {
       const storedReqs = localStorage.getItem(`plexochat_reqs_${user.id}`);
-      if (storedReqs) {
-        setRequests(JSON.parse(storedReqs));
-      } else {
-        setRequests([]);
-      }
-
       const storedConns = localStorage.getItem(`plexochat_conns_${user.id}`);
-      if (storedConns) {
-        setConnections(JSON.parse(storedConns));
-      } else {
-        setConnections([]);
-      }
+      queueMicrotask(() => {
+        setRequests(storedReqs ? JSON.parse(storedReqs) : []);
+        setConnections(storedConns ? JSON.parse(storedConns) : []);
+      });
     } catch (e) {
       console.error("Failed to load user connections", e);
-      setRequests([]);
-      setConnections([]);
+      queueMicrotask(() => {
+        setRequests([]);
+        setConnections([]);
+      });
     }
   }, [user]);
 

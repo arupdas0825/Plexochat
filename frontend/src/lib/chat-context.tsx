@@ -23,8 +23,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   // Load threads for the authenticated user
   useEffect(() => {
     if (!user) {
-      setThreads([]);
-      setActiveThreadId(null);
+      queueMicrotask(() => {
+        setThreads([]);
+        setActiveThreadId(null);
+      });
       return;
     }
 
@@ -33,17 +35,19 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       const saved = localStorage.getItem(storageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
-        setThreads(parsed);
-        if (parsed.length > 0 && !activeThreadId) {
-          setActiveThreadId(parsed[0].id);
-        }
+        queueMicrotask(() => {
+          setThreads(parsed);
+          setActiveThreadId((prev) => (parsed.length > 0 && !prev ? parsed[0].id : prev));
+        });
       } else {
-        setThreads([]);
-        setActiveThreadId(null);
+        queueMicrotask(() => {
+          setThreads([]);
+          setActiveThreadId(null);
+        });
       }
     } catch (e) {
       console.error("Failed to load threads", e);
-      setThreads([]);
+      queueMicrotask(() => setThreads([]));
     }
   }, [user]);
 

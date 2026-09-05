@@ -97,30 +97,30 @@ export function getFirebaseErrorMessage(error: unknown): string {
   }
 }
 
+const getRegisteredUsers = (): UserProfile[] => {
+  try {
+    const stored = typeof window !== "undefined" ? localStorage.getItem("plexochat_registered_users") : null;
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveRegisteredUser = (profile: UserProfile) => {
+  if (typeof window === "undefined") return;
+  const existing = getRegisteredUsers();
+  const updated = [
+    profile,
+    ...existing.filter((u) => u.id !== profile.id && u.username !== profile.username),
+  ];
+  localStorage.setItem("plexochat_registered_users", JSON.stringify(updated));
+};
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
-
-  const getRegisteredUsers = (): UserProfile[] => {
-    try {
-      const stored = typeof window !== "undefined" ? localStorage.getItem("plexochat_registered_users") : null;
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  };
-
-  const saveRegisteredUser = (profile: UserProfile) => {
-    if (typeof window === "undefined") return;
-    const existing = getRegisteredUsers();
-    const updated = [
-      profile,
-      ...existing.filter((u) => u.id !== profile.id && u.username !== profile.username),
-    ];
-    localStorage.setItem("plexochat_registered_users", JSON.stringify(updated));
-  };
 
   // Sync with Firebase auth state
   useEffect(() => {

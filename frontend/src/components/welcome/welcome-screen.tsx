@@ -23,7 +23,6 @@ import {
   UserPlus, 
   Loader2, 
   CheckCircle2, 
-  MessageSquareShare,
   SlidersHorizontal 
 } from "lucide-react";
 
@@ -47,7 +46,7 @@ export function WelcomeScreen() {
   // Sync state if user logs in
   React.useEffect(() => {
     if (isAuthenticated) {
-      setScreenState("session_found");
+      queueMicrotask(() => setScreenState("session_found"));
     }
   }, [isAuthenticated]);
 
