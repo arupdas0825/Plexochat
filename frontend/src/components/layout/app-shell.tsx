@@ -29,7 +29,8 @@ export function AppShell({ children }: AppShellProps) {
   const router = useRouter();
   const { user, isAuthenticated, isLoading, logout, updateProfile } = useAuth();
   const { pendingIncomingCount } = useConnections();
-  const { unreadTotal } = useChat();
+  const { unreadTotal, activeThreadId } = useChat();
+  const isChatOpenOnMobile = pathname === "/chats" && activeThreadId !== null;
 
   React.useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -87,7 +88,7 @@ export function AppShell({ children }: AppShellProps) {
   };
 
   return (
-    <div className="min-h-screen h-screen flex flex-col md:flex-row bg-background text-foreground overflow-hidden">
+    <div className="min-h-screen min-h-[100dvh] h-screen h-[100dvh] flex flex-col md:flex-row bg-background text-foreground overflow-hidden">
       
       {/* 1. Desktop Left Navigation Sidebar */}
       <aside className="hidden md:flex flex-col w-64 lg:w-72 h-full bg-card/95 backdrop-blur-md border-r border-border/80 shrink-0 select-none z-20">
@@ -222,64 +223,68 @@ export function AppShell({ children }: AppShellProps) {
 
       </aside>
 
-      {/* 2. Mobile Top Navigation Bar */}
-      <header className="md:hidden flex items-center justify-between px-4 py-3 bg-card border-b border-border/80 z-20 shrink-0">
-        <Link href="/home" className="flex items-center gap-2">
-          <Image
-            src="/logo.png"
-            alt="PlexoChat Logo"
-            width={28}
-            height={28}
-            className="w-7 h-7 object-contain"
-          />
-          <span className="font-bold text-base tracking-tight text-foreground">
-            PlexoChat
-          </span>
-        </Link>
-
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-          <Link
-            href="/settings"
-            className="w-7 h-7 rounded-full bg-gradient-to-tr from-primary to-violet-500 text-white flex items-center justify-center font-bold text-xs"
-          >
-            {user?.displayName ? user.displayName.substring(0, 1).toUpperCase() : "U"}
+      {/* 2. Mobile Top Navigation Bar (Hidden when actively inside a mobile chat thread) */}
+      {!isChatOpenOnMobile && (
+        <header className="md:hidden flex items-center justify-between px-4 py-3 bg-card/95 backdrop-blur-md border-b border-border/80 z-20 shrink-0 pt-[max(0.75rem,env(safe-area-inset-top))]">
+          <Link href="/home" className="flex items-center gap-2">
+            <Image
+              src="/logo.png"
+              alt="PlexoChat Logo"
+              width={28}
+              height={28}
+              className="w-7 h-7 object-contain"
+            />
+            <span className="font-bold text-base tracking-tight text-foreground">
+              PlexoChat
+            </span>
           </Link>
-        </div>
-      </header>
+
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Link
+              href="/settings"
+              className="w-7 h-7 rounded-full bg-gradient-to-tr from-primary to-violet-500 text-white flex items-center justify-center font-bold text-xs"
+            >
+              {user?.displayName ? user.displayName.substring(0, 1).toUpperCase() : "U"}
+            </Link>
+          </div>
+        </header>
+      )}
 
       {/* 3. Center Main Application Work Area */}
-      <main className="flex-1 h-[calc(100vh-112px)] md:h-full overflow-hidden flex flex-col min-w-0">
+      <main className="flex-1 min-h-0 h-full overflow-hidden flex flex-col min-w-0">
         {children}
       </main>
 
-      {/* 4. Mobile Bottom Navigation Bar */}
-      <nav className="md:hidden flex items-center justify-around px-2 py-2 bg-card/95 backdrop-blur-md border-t border-border/80 z-20 shrink-0">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = pathname === item.href || (item.href !== "/home" && pathname?.startsWith(item.href));
+      {/* 4. Mobile Bottom Navigation Bar (Hidden when actively inside a mobile chat thread) */}
+      {!isChatOpenOnMobile && (
+        <nav className="md:hidden flex items-center justify-around px-2 py-2 bg-card/95 backdrop-blur-md border-t border-border/80 z-20 shrink-0 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = pathname === item.href || (item.href !== "/home" && pathname?.startsWith(item.href));
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all relative ${
-                isActive ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <div className="relative">
-                <Icon className="w-5 h-5" />
-                {item.badge !== null && (
-                  <span className="absolute -top-1 -right-2 px-1 rounded-full text-[9px] font-bold bg-primary text-primary-foreground font-mono">
-                    {item.badge}
-                  </span>
-                )}
-              </div>
-              <span className="text-[10px] mt-0.5 tracking-tight">{item.label.split(" ")[0]}</span>
-            </Link>
-          );
-        })}
-      </nav>
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all relative active:scale-95 touch-manipulation ${
+                  isActive ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <div className="relative">
+                  <Icon className="w-5 h-5" />
+                  {item.badge !== null && (
+                    <span className="absolute -top-1 -right-2 px-1 rounded-full text-[9px] font-bold bg-primary text-primary-foreground font-mono">
+                      {item.badge}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] mt-0.5 tracking-tight">{item.label.split(" ")[0]}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      )}
 
     </div>
   );

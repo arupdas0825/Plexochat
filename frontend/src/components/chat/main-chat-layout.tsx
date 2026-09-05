@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { SidebarNav } from "./sidebar-nav";
 import { ConversationView } from "./conversation-view";
 import { ConnectionsView } from "./connections-view";
@@ -47,14 +48,12 @@ export function MainChatLayout() {
     }));
 
   return (
-    <div className="h-full w-full overflow-hidden flex bg-background text-foreground">
+    <div className="h-full w-full overflow-hidden flex bg-background text-foreground relative">
       
-      {/* Left Sidebar Navigation (Desktop or Mobile Chats list) */}
+      {/* 1. Sidebar Navigation (Always mounted on mobile to preserve scroll state) */}
       <div
         className={`${
-          activeThreadId && activeTab === "chats"
-            ? "hidden md:flex"
-            : "flex"
+          activeTab === "chats" ? "flex" : "hidden md:flex"
         } w-full md:w-80 lg:w-96 shrink-0 h-full`}
       >
         <SidebarNav
@@ -73,12 +72,30 @@ export function MainChatLayout() {
         />
       </div>
 
-      {/* Right Content Area: Active Conversation / Contacts / Settings / Empty State */}
+      {/* 2. Mobile Fullscreen Slide-in Conversation Stack */}
+      <AnimatePresence>
+        {activeThread && activeTab === "chats" && (
+          <motion.div
+            key={`mobile-chat-${activeThread.id}`}
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", damping: 32, stiffness: 350 }}
+            className="fixed inset-0 z-30 md:hidden bg-background flex flex-col"
+          >
+            <ConversationView
+              thread={activeThread}
+              onBack={() => selectThread(null)}
+              onSendMessage={(threadId, text) => sendMessage(threadId, text)}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 3. Desktop Main View Area / Mobile Secondary Tabs */}
       <main
         className={`${
-          !activeThreadId && activeTab === "chats"
-            ? "hidden md:flex"
-            : "flex"
+          activeTab !== "chats" ? "flex" : "hidden md:flex"
         } flex-1 h-full min-w-0 flex-col`}
       >
         {activeTab === "connections" ? (
@@ -92,6 +109,7 @@ export function MainChatLayout() {
               selectThread(id);
               setActiveTab("chats");
             }}
+            onBack={() => setActiveTab("chats")}
           />
         ) : activeTab === "settings" ? (
           <SettingsView />
