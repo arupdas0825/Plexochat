@@ -1,4 +1,6 @@
-# PlexoChat™
+<img width="125" height="125" alt="1000220658" src="https://github.com/user-attachments/assets/1accdeb3-a42b-4fb6-ac9e-aba509a90044" />
+
+# PlexoChat
 
 **A privacy-focused, multilingual messenger that lets people chat naturally in their own language — while automatically translating every conversation into each other's preferred language.**
 
