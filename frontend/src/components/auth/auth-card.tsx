@@ -17,12 +17,23 @@ import { LoginForm } from "./login-form";
 import { SignupForm } from "./signup-form";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
+
 interface AuthCardProps {
   initialMode?: "login" | "signup";
 }
 
 export function AuthCard({ initialMode = "login" }: AuthCardProps) {
   const [mode, setMode] = useState<"login" | "signup">(initialMode);
+  const { isAuthenticated, isLoading } = useAuth();
+  const router = useRouter();
+
+  React.useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      router.replace("/home");
+    }
+  }, [isAuthenticated, isLoading, router]);
 
   return (
     <div className="min-h-screen w-full flex flex-col justify-between bg-background bg-mesh-gradient text-foreground px-4 py-6 sm:py-10 relative selection:bg-primary/20 selection:text-primary">

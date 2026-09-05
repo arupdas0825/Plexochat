@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Home,
   MessageSquare,
@@ -26,9 +26,16 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
-  const { user, logout, updateProfile } = useAuth();
+  const router = useRouter();
+  const { user, isAuthenticated, isLoading, logout, updateProfile } = useAuth();
   const { pendingIncomingCount } = useConnections();
   const { unreadTotal } = useChat();
+
+  React.useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [isAuthenticated, isLoading, router]);
 
   const navItems = [
     {
