@@ -1,0 +1,49 @@
+# Dependencies
+**/node_modules/
+**/.pnp
+.pnp.*
+
+# Build outputs
+**/.next/
+**/out/
+**/build/
+**/dist/
+
+# Environment files & secrets (all directories)
+**/.env*
+!**/.env.example
+*.env
+*.env.local
+frontend/.env.local
+.env.local
+
+# Private keys, certificates & service accounts
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*.cert
+**/*.crt
+**/*service-account*.json
+**/*credentials*.json
+**/*firebase-adminsdk*.json
+**/google-services.json
+
+# Logs & debug traces
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/.pnpm-debug.log*
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+**/*.sw?
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Vercel
+**/.vercel/

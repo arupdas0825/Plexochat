@@ -1,0 +1,115 @@
+# PlexoChat — Project Memory
+
+Purpose of this document: a compact, durable reference of decisions, constraints, and terminology so that anyone (or any AI assistant) picking up this project later doesn't have to re-derive them from scratch. Treat this as the **source of truth for "what has already been decided"** — if a future conversation or contributor proposes something that contradicts an entry here, flag the conflict explicitly rather than silently overriding it.
+
+---
+
+## 1. Identity
+
+- **Product name:** PlexoChat
+- **One-line description:** A privacy-focused multilingual messenger that lets people chat naturally in their own language while automatically translating conversations into each other's preferred language.
+- **Not:** a general-purpose social network, a standalone translation app, or a group-chat platform.
+
+---
+
+## 2. Locked Product Decisions (do not silently change)
+
+1. Fully web-based (desktop + mobile browsers); no native app in MVP.
+2. 1-to-1 private messaging only.
+3. Text + photo only — no other file types.
+4. Translation is automatic and always on — never an opt-in manual action.
+5. Translation target = **receiver's** preferred language, not the sender's.
+6. **Sender also sees the translated version by default** — this is counterintuitive and easy to get wrong; do not default to showing the sender their own raw input.
+7. Original message is never overwritten — it is always retrievable.
+8. Reveal interaction: double-click (desktop) / double-tap (mobile), **plus** a mandatory accessible non-gesture alternative ("View original").
+9. Mixed-language/romanized/code-switched input (e.g., Banglish) must work without the user picking a "language" per message.
+10. Messaging requires an explicit connection request **and** acceptance — no unsolicited messaging, ever.
+11. E2EE applies to both text and photos.
+12. Client-side/local translation is the preferred architecture specifically because it preserves the E2EE privacy claim — if this is ever revisited in favor of a cloud translation API, the E2EE/privacy claims must be re-qualified everywhere (marketing, `architecture.md`, `security.md`, UI copy).
+13. The server is designed as an encrypted relay + coordination layer — it should never need plaintext messages, plaintext photos, or private keys.
+14. No custom cryptography, under any circumstances — established libraries/protocols only.
+15. Never make absolute security claims ("100% secure," "unbreakable," "impossible to hack") in any user-facing or marketing surface.
+
+---
+
+## 3. Explicitly Excluded from MVP
+
+Voice calls, video calls, group chats, channels, stories/status, public feed, payments, stickers-as-core-feature, general file sharing, public social features, language-partner discovery, in-app "Learn" mode, PWA packaging, multi-device sessions.
+
+If any of these come up as a request mid-build, the default answer is: **defer to post-MVP** unless there is an explicit, deliberate decision to pull it forward (and that decision should be recorded back into this file).
+
+---
+
+## 4. Canonical Terminology / Glossary
+
+| Term | Meaning |
+|---|---|
+| **PlexoChat ID** | Unique identifier for a user, usable alongside username for search/discovery. |
+| **Preferred receiving language** | The language a user wants all incoming messages translated into. Drives translation direction. |
+| **Original message** | The as-typed source text from the sender, in whatever language/script mix they used. Never deleted or overwritten. |
+| **Translated message** | The default-rendered version of a message, targeted at the receiver's preferred language, shown to both participants by default. |
+| **Connection** | A mutually-accepted relationship between two users that unlocks messaging. |
+| **Connection Request** | A pending, one-directional request to form a Connection; must be Accepted, Declined, or the sender Blocked. |
+| **ChatSession** | The secure (E2EE) session tied to an active, accepted Connection. |
+| **DeviceKey** | Per-device public key material registered to a user; private keys never leave the device. |
+| **Encrypted relay** | The server's core role — moving ciphertext between clients without needing to read it. |
+| **Banglish** | Romanized/mixed Bengali-English input, used as the canonical example of the messy real-world input translation must handle gracefully. |
+
+---
+
+## 5. Key Non-Obvious Architectural Facts
+
+- The **E2EE + translation constraint** is the single most important architectural tension in this product: server-side plaintext translation (via a cloud API) is fundamentally incompatible with a genuine E2EE claim. This is why local/on-device translation is the default architectural choice, not a preference.
+- Because this is a **web app**, the server delivers the client JavaScript. This means the trust model differs from a natively distributed app — a compromised deploy pipeline could theoretically alter client crypto code. This caveat must always be reflected honestly in security messaging.
+- The connection-acceptance state machine (`NONE → REQUEST_SENT → PENDING → ACCEPTED → E2EE_SESSION_ESTABLISHED → ACTIVE_CHAT`) is simultaneously a UX flow **and** the primary anti-spam/anti-abuse control. Don't treat it as "just onboarding UX" — it's load-bearing for security.
+
+---
+
+## 6. Stack Snapshot — FINAL, LOCKED FOR IMPLEMENTATION START
+
+This stack replaces the earlier PostgreSQL-based draft and is the confirmed starting point:
+
+```
+Frontend               Next.js + TypeScript
+Backend                FastAPI + Python
+Authentication         Firebase Authentication
+Database               MongoDB Atlas
+Real-time / Presence   WebSocket + Redis
+Photo Storage          Cloudflare R2
+End-to-End Encryption  Browser-side Web Crypto + established protocol/library
+```
+
+Key implications of this specific stack (record these so they aren't re-derived/re-argued later):
+- **Firebase Authentication owns passwords/credentials.** FastAPI never stores or hashes passwords itself — it only verifies Firebase-issued ID tokens via the Admin SDK. PlexoChat's own backend still owns username, PlexoChat ID, display name, preferred receiving language, connections, and device keys.
+- **MongoDB Atlas replaces PostgreSQL** as the durable store. Data model is document-based (see `architecture.md` §4), keyed off `firebase_uid` for user identity linkage.
+- **Redis** is unchanged in role: real-time presence + rate-limit counters + in-flight delivery/session state.
+- **Cloudflare R2 replaces the earlier generic "isolated object storage"** placeholder for encrypted photo blobs. Access pattern is FastAPI-issued short-lived presigned URLs, browser-to-R2 direct upload/download — R2 bucket stays private.
+- **Firebase client config vs. Admin SDK key:** the Firebase client-side config (API key, project ID) is expected to be public by Firebase's own design — don't mistake this for a leak. The Admin SDK **service account key** is the actual secret and must never reach the frontend or repo.
+- Client crypto/storage: Web Crypto API, IndexedDB, an established E2EE library/protocol (specific choice still to be finalized — **not yet locked**, see below).
+
+**Open item (unchanged):** the exact E2EE protocol/library has intentionally not been locked yet. When it is chosen during Phase 5 implementation, record the choice and rationale here.
+
+---
+
+## 7. Document Map
+
+| File | Purpose |
+|---|---|
+| `prd.md` | What we're building and why; scope, requirements, success criteria. |
+| `design.md` | UX/UI structure, layouts, interaction patterns, accessibility. |
+| `architecture.md` | Technical architecture, data model, E2EE design, security architecture summary. |
+| `phases.md` | Sequenced MVP roadmap with per-phase exit criteria. |
+| `security.md` | Full security control specification (rate limiting, validation, secrets, dependencies, error handling, file uploads) plus the broader security requirement checklist. |
+| `memory.md` | This file — durable decisions, glossary, and open items. |
+
+---
+
+## 8. Open Questions / Not Yet Decided
+
+- Exact E2EE protocol/library selection (Phase 5).
+- Whether/when passwordless auth (e.g., passkeys) is considered vs. traditional password + hashing.
+- Object storage provider/approach for encrypted photo blobs.
+- Specific rate-limit thresholds (deliberately left configurable, not hardcoded — see `security.md`).
+- Long-term data retention policy for ciphertext and metadata.
+
+Update this section as decisions are made; move resolved items into Section 2 or 6 with the decision and date.
