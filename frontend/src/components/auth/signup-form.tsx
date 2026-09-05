@@ -9,7 +9,7 @@
  * - Auto-generated PlexoChat ID preview
  * - Client-side cryptographic key generation indicator
  */
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Eye, EyeOff, Loader2, ArrowRight, ShieldCheck, Languages, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,10 +32,14 @@ export function SignupForm({ onSuccess, onSwitchToLogin }: SignupFormProps) {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Auto-generated ID preview for user delight
-  const [generatedId] = useState(
-    () => "PX-" + Math.floor(1000 + Math.random() * 9000) + "-X"
-  );
+  // Auto-generated ID preview for user delight (initialized deterministically to prevent SSR hydration mismatch)
+  const [generatedId, setGeneratedId] = useState("PX-8921-X");
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setGeneratedId("PX-" + Math.floor(1000 + Math.random() * 9000) + "-X");
+    });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -194,7 +198,7 @@ export function SignupForm({ onSuccess, onSwitchToLogin }: SignupFormProps) {
             Unique Username
           </label>
           <span className="text-[10px] text-muted-foreground font-mono">
-            Assigned ID: <strong className="text-primary">{generatedId}</strong>
+            Assigned ID: <strong className="text-primary" suppressHydrationWarning>{generatedId}</strong>
           </span>
         </div>
         <div className="relative">

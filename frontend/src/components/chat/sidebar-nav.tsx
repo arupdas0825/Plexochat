@@ -256,7 +256,7 @@ export function SidebarNav({
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className="flex-1 overflow-y-auto momentum-scroll divide-y divide-border/30"
+        className="flex-1 overflow-y-auto momentum-scroll divide-y divide-border/30 pb-28 md:pb-4"
       >
         {activeTab === "chats" && (
           filteredThreads.length === 0 ? (

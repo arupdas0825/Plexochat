@@ -112,7 +112,7 @@ export function HomeDashboard() {
   };
 
   return (
-    <div className="flex-1 h-full overflow-y-auto p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
+    <div className="flex-1 h-full overflow-y-auto p-4 md:p-6 lg:p-8 pb-28 md:pb-8 space-y-6 max-w-7xl mx-auto w-full">
       
       {/* 1. Header: Dynamic Greeting & Quick Actions */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-2 border-b border-border/60">

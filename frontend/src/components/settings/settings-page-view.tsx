@@ -56,7 +56,7 @@ export function SettingsPageView() {
   };
 
   return (
-    <div className="flex-1 h-full overflow-y-auto p-4 md:p-6 lg:p-8 space-y-6 max-w-4xl mx-auto w-full">
+    <div className="flex-1 h-full overflow-y-auto p-4 md:p-6 lg:p-8 pb-28 md:pb-8 space-y-6 max-w-4xl mx-auto w-full">
       
       {/* 1. Header */}
       <div className="flex items-center justify-between pb-2 border-b border-border/60">

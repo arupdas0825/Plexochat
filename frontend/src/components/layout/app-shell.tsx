@@ -18,6 +18,7 @@ import { useAuth, SUPPORTED_LANGUAGES } from "@/lib/auth-context";
 import { useConnections } from "@/lib/connections-context";
 import { useChat } from "@/lib/chat-context";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { FloatingBottomNav } from "./floating-bottom-nav";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -51,7 +52,7 @@ export function AppShell({ children }: AppShellProps) {
       badge: unreadTotal > 0 ? unreadTotal : null,
     },
     {
-      label: "Explore World",
+      label: "Explore",
       href: "/explore",
       icon: Globe2,
       badge: null,
@@ -255,35 +256,8 @@ export function AppShell({ children }: AppShellProps) {
         {children}
       </main>
 
-      {/* 4. Mobile Bottom Navigation Bar (Hidden when actively inside a mobile chat thread) */}
-      {!isChatOpenOnMobile && (
-        <nav className="md:hidden flex items-center justify-around px-2 py-2 bg-card/95 backdrop-blur-md border-t border-border/80 z-20 shrink-0 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = pathname === item.href || (item.href !== "/home" && pathname?.startsWith(item.href));
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all relative active:scale-95 touch-manipulation ${
-                  isActive ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <div className="relative">
-                  <Icon className="w-5 h-5" />
-                  {item.badge !== null && (
-                    <span className="absolute -top-1 -right-2 px-1 rounded-full text-[9px] font-bold bg-primary text-primary-foreground font-mono">
-                      {item.badge}
-                    </span>
-                  )}
-                </div>
-                <span className="text-[10px] mt-0.5 tracking-tight">{item.label.split(" ")[0]}</span>
-              </Link>
-            );
-          })}
-        </nav>
-      )}
+      {/* 4. Floating Liquid Glass Mobile Bottom Navigation */}
+      <FloatingBottomNav />
 
     </div>
   );
