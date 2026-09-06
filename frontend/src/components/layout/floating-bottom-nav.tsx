@@ -8,7 +8,6 @@ import {
   Home,
   MessageSquare,
   Globe2,
-  Users,
   Calendar,
   Settings,
 } from "lucide-react";
@@ -39,22 +38,16 @@ export function FloatingBottomNav() {
       badge: null,
     },
     {
+      label: "Explore",
+      href: "/explore",
+      icon: Globe2,
+      badge: pendingIncomingCount > 0 ? pendingIncomingCount : null,
+    },
+    {
       label: "Chats",
       href: "/chats",
       icon: MessageSquare,
       badge: unreadTotal > 0 ? unreadTotal : null,
-    },
-    {
-      label: "Explore",
-      href: "/explore",
-      icon: Globe2,
-      badge: null,
-    },
-    {
-      label: "Connections",
-      href: "/connections",
-      icon: Users,
-      badge: pendingIncomingCount > 0 ? pendingIncomingCount : null,
     },
     {
       label: "Calendar",

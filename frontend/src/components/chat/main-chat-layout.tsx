@@ -4,69 +4,28 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SidebarNav } from "./sidebar-nav";
 import { ConversationView } from "./conversation-view";
-import { ConnectionsView } from "./connections-view";
-import { SettingsView } from "./settings-view";
 import { NewChatDialog } from "./new-chat-dialog";
-import { ConnectionRequest } from "@/lib/mock-chat-data";
 import { MessageSquare, Plus, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useChat } from "@/lib/chat-context";
-import { useConnections } from "@/lib/connections-context";
 
 export function MainChatLayout() {
-  const [activeTab, setActiveTab] = useState<"chats" | "connections" | "settings">("chats");
   const { threads, activeThreadId, selectThread, sendMessage } = useChat();
-  const {
-    requests: storedRequests,
-    acceptConnectionRequest,
-    declineConnectionRequest,
-    blockConnectionUser,
-  } = useConnections();
-
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
   const activeThread = threads.find((t) => t.id === activeThreadId);
 
-  // Adapt storedRequests to ConnectionRequest interface
-  const adaptedRequests: ConnectionRequest[] = storedRequests
-    .filter((r) => r.type === "incoming" && r.status === "pending")
-    .map((r) => ({
-      id: r.id,
-      sender: {
-        id: r.userId,
-        username: r.username,
-        displayName: r.displayName,
-        plexoChatId: "PX-VERIFIED",
-        avatarBg: r.avatarBg,
-        preferredLanguage: r.languagesSpoken[0] || "English",
-        languageCode: "AUTO",
-        online: true,
-      },
-      timestamp: r.sentAt,
-      status: "PENDING",
-    }));
-
   return (
     <div className="h-full w-full overflow-hidden flex bg-background text-foreground relative">
       
       {/* 1. Sidebar Navigation (Always mounted on mobile to preserve scroll state) */}
-      <div
-        className={`${
-          activeTab === "chats" ? "flex" : "hidden md:flex"
-        } w-full md:w-80 lg:w-96 shrink-0 h-full`}
-      >
+      <div className="w-full md:w-80 lg:w-96 shrink-0 h-full flex">
         <SidebarNav
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
           threads={threads}
           activeThreadId={activeThreadId}
-          onSelectThread={(id) => {
-            selectThread(id);
-            setActiveTab("chats");
-          }}
+          onSelectThread={(id) => selectThread(id)}
           onOpenNewChat={() => setIsNewChatOpen(true)}
-          pendingRequestsCount={adaptedRequests.length}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
         />
@@ -74,7 +33,7 @@ export function MainChatLayout() {
 
       {/* 2. Mobile Fullscreen Slide-in Conversation Stack */}
       <AnimatePresence>
-        {activeThread && activeTab === "chats" && (
+        {activeThread && (
           <motion.div
             key={`mobile-chat-${activeThread.id}`}
             initial={{ x: "100%" }}
@@ -92,28 +51,9 @@ export function MainChatLayout() {
         )}
       </AnimatePresence>
 
-      {/* 3. Desktop Main View Area / Mobile Secondary Tabs */}
-      <main
-        className={`${
-          activeTab !== "chats" ? "flex" : "hidden md:flex"
-        } flex-1 h-full min-w-0 flex-col`}
-      >
-        {activeTab === "connections" ? (
-          <ConnectionsView
-            requests={adaptedRequests}
-            onAcceptRequest={(id) => acceptConnectionRequest(id)}
-            onDeclineRequest={(id) => declineConnectionRequest(id)}
-            onBlockUser={(id) => blockConnectionUser(id)}
-            activeThreads={threads}
-            onSelectChat={(id) => {
-              selectThread(id);
-              setActiveTab("chats");
-            }}
-            onBack={() => setActiveTab("chats")}
-          />
-        ) : activeTab === "settings" ? (
-          <SettingsView />
-        ) : activeThread ? (
+      {/* 3. Desktop Main View Area */}
+      <main className="hidden md:flex flex-1 h-full min-w-0 flex-col">
+        {activeThread ? (
           <ConversationView
             thread={activeThread}
             onBack={() => selectThread(null)}

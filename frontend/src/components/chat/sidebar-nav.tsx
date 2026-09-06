@@ -10,12 +10,11 @@
  * - Touch-manipulation on tabs and buttons for zero tap-delay.
  */
 import React, { useState } from "react";
-import Image from "next/image";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   MessageSquare,
   Users,
-  Settings,
   Plus,
   Search,
   Sparkles,
@@ -26,34 +25,30 @@ import {
   Volume2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { ChatThread } from "@/lib/mock-chat-data";
-import { useAuth } from "@/lib/auth-context";
+import { useConnections } from "@/lib/connections-context";
 
 interface SidebarNavProps {
-  activeTab: "chats" | "connections" | "settings";
-  setActiveTab: (tab: "chats" | "connections" | "settings") => void;
   threads: ChatThread[];
   activeThreadId: string | null;
   onSelectThread: (id: string) => void;
   onOpenNewChat: () => void;
-  pendingRequestsCount: number;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
+  activeTab?: "chats" | "connections" | "settings";
+  setActiveTab?: (tab: "chats" | "connections" | "settings") => void;
+  pendingRequestsCount?: number;
 }
 
 export function SidebarNav({
-  activeTab,
-  setActiveTab,
   threads,
   activeThreadId,
   onSelectThread,
   onOpenNewChat,
-  pendingRequestsCount,
   searchQuery,
   setSearchQuery,
 }: SidebarNavProps) {
-  const { user } = useAuth();
+  const { pendingIncomingCount } = useConnections();
   const [mutedThreads, setMutedThreads] = useState<Record<string, boolean>>({});
   const [archivedThreads, setArchivedThreads] = useState<Record<string, boolean>>({});
   const [deletedThreads, setDeletedThreads] = useState<Record<string, boolean>>({});
@@ -115,125 +110,54 @@ export function SidebarNav({
   return (
     <aside className="w-full md:w-80 lg:w-96 h-full flex flex-col bg-card border-r border-border select-none overflow-hidden">
       
-      {/* 1. Top Header: Logo + New Chat Action */}
+      {/* 1. Top Header: Chats Title + New Chat Action */}
       <div className="p-3.5 sm:p-4 border-b border-border/70 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 relative flex items-center justify-center">
-            <Image
-              src="/logo.png"
-              alt="PlexoChat Logo"
-              width={32}
-              height={32}
-              className="w-8 h-8 object-contain"
-              priority
-            />
-          </div>
-          <div>
-            <span className="font-bold text-base tracking-tight text-foreground block leading-tight">
-              PlexoChat
-            </span>
-            <span className="text-[10px] text-emerald-500 font-mono font-medium flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              E2EE Relay Active
-            </span>
-          </div>
-        </div>
+        <h1 className="text-xl font-bold tracking-tight text-foreground">
+          Chats
+        </h1>
 
-        <Button
-          size="sm"
-          onClick={onOpenNewChat}
-          className="h-8 px-3 rounded-xl gap-1.5 text-xs font-semibold shadow-sm active:scale-95 touch-manipulation"
-          title="Start new chat with someone"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>New Chat</span>
-        </Button>
+        <div className="flex items-center gap-1.5">
+          <Link href="/explore?tab=connections">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 w-8 p-0 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary relative touch-manipulation border-border/70"
+              title="Contacts & Connections"
+            >
+              <Users className="w-4 h-4" />
+              {pendingIncomingCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-primary text-white text-[9px] font-bold flex items-center justify-center shadow-xs">
+                  {pendingIncomingCount}
+                </span>
+              )}
+            </Button>
+          </Link>
+
+          <Button
+            size="sm"
+            onClick={onOpenNewChat}
+            className="h-8 px-3 rounded-xl gap-1.5 text-xs font-semibold shadow-sm active:scale-95 touch-manipulation"
+            title="Start new chat with someone"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>New Chat</span>
+          </Button>
+        </div>
       </div>
 
-      {/* 2. Logged in user profile chip */}
-      {user && (
-        <div className="px-3.5 py-2 bg-secondary/30 border-b border-border/40 flex items-center justify-between text-xs shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-primary to-violet-500 text-white flex items-center justify-center font-bold text-[10px] shrink-0">
-              {user.displayName.substring(0, 1).toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <div className="font-semibold text-foreground truncate text-xs leading-none">
-                {user.displayName}
-              </div>
-              <div className="text-[9px] text-muted-foreground font-mono truncate mt-0.5">
-                @{user.username}
-              </div>
-            </div>
-          </div>
-          <Badge variant="accent" className="text-[9px] font-mono py-0 px-1.5 shrink-0">
-            {user.plexoChatId}
-          </Badge>
+      {/* 2. Search Bar */}
+      <div className="p-2.5 border-b border-border/50 shrink-0">
+        <div className="relative">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search conversations..."
+            className="w-full h-9 pl-9 pr-3 rounded-xl border border-border/80 bg-secondary/40 text-foreground placeholder:text-muted-foreground text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+          />
         </div>
-      )}
-
-      {/* 3. Tabs Navigation */}
-      <div className="grid grid-cols-3 p-1.5 bg-secondary/50 border-b border-border/60 text-xs font-medium gap-1 shrink-0">
-        <button
-          type="button"
-          onClick={() => setActiveTab("chats")}
-          className={`py-1.5 px-2 rounded-xl flex items-center justify-center gap-1.5 transition-all touch-manipulation active:scale-95 ${
-            activeTab === "chats"
-              ? "bg-card text-foreground font-semibold shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <MessageSquare className="w-3.5 h-3.5" />
-          <span>Chats</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("connections")}
-          className={`py-1.5 px-2 rounded-xl flex items-center justify-center gap-1.5 transition-all touch-manipulation active:scale-95 relative ${
-            activeTab === "connections"
-              ? "bg-card text-foreground font-semibold shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <Users className="w-3.5 h-3.5" />
-          <span>Contacts</span>
-          {pendingRequestsCount > 0 && (
-            <span className="w-4 h-4 rounded-full bg-primary text-white text-[9px] font-bold flex items-center justify-center">
-              {pendingRequestsCount}
-            </span>
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("settings")}
-          className={`py-1.5 px-2 rounded-xl flex items-center justify-center gap-1.5 transition-all touch-manipulation active:scale-95 ${
-            activeTab === "settings"
-              ? "bg-card text-foreground font-semibold shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <Settings className="w-3.5 h-3.5" />
-          <span>Settings</span>
-        </button>
       </div>
-
-      {/* 4. Search Bar */}
-      {activeTab === "chats" && (
-        <div className="p-2.5 border-b border-border/50 shrink-0">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search conversations..."
-              className="w-full h-9 pl-9 pr-3 rounded-xl border border-border/80 bg-secondary/40 text-foreground placeholder:text-muted-foreground text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-            />
-          </div>
-        </div>
-      )}
 
       {/* 5. Pull-to-Refresh Visual Indicator */}
       <div
@@ -256,20 +180,19 @@ export function SidebarNav({
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className="flex-1 overflow-y-auto momentum-scroll divide-y divide-border/30 pb-28 md:pb-4"
+        className="flex-1 overflow-y-auto no-scrollbar momentum-scroll divide-y divide-border/30 pb-28 md:pb-4"
       >
-        {activeTab === "chats" && (
-          filteredThreads.length === 0 ? (
-            <div className="p-8 text-center text-xs text-muted-foreground space-y-3">
-              <div className="w-12 h-12 rounded-full bg-secondary mx-auto flex items-center justify-center text-muted-foreground">
-                <MessageSquare className="w-6 h-6" />
-              </div>
-              <p>No chats found.</p>
-              <Button size="sm" variant="outline" onClick={onOpenNewChat} className="text-xs">
-                Start a New Chat
-              </Button>
+        {filteredThreads.length === 0 ? (
+          <div className="p-8 text-center text-xs text-muted-foreground space-y-3">
+            <div className="w-12 h-12 rounded-full bg-secondary mx-auto flex items-center justify-center text-muted-foreground">
+              <MessageSquare className="w-6 h-6" />
             </div>
-          ) : (
+            <p>No chats found.</p>
+            <Button size="sm" variant="outline" onClick={onOpenNewChat} className="text-xs">
+              Start a New Chat
+            </Button>
+          </div>
+        ) : (
             filteredThreads.map((thread) => {
               const isActive = activeThreadId === thread.id;
               const p = thread.participant;
@@ -374,8 +297,7 @@ export function SidebarNav({
                 </div>
               );
             })
-          )
-        )}
+          )}
       </div>
 
     </aside>
