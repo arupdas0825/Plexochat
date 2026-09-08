@@ -285,7 +285,7 @@ export function ConversationView({
         originalText: "📷 [Photo Attachment]",
         originalLang: "Auto",
         translatedText: "📷 [Photo Attachment]",
-        targetLangCode: participant.languageCode,
+        targetLangCode: participant.languageCode || "EN",
         timestamp: "Just now",
         status: "sent",
         isPhoto: true,

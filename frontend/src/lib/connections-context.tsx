@@ -1,121 +1,147 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import {
   DiscoverableUser,
   StoredConnectionRequest,
   ConnectedFriend,
 } from "./explore-calendar-data";
-import { useAuth, UserProfile } from "./auth-context";
+import { useAuth, getBackendUrl } from "./auth-context";
 
 interface ConnectionsContextType {
   exploreUsers: DiscoverableUser[];
   requests: StoredConnectionRequest[];
   connections: ConnectedFriend[];
   pendingIncomingCount: number;
-  sendConnectionRequest: (user: DiscoverableUser, note?: string) => boolean;
-  acceptConnectionRequest: (requestId: string) => void;
-  declineConnectionRequest: (requestId: string) => void;
-  cancelConnectionRequest: (requestId: string) => void;
-  blockConnectionUser: (requestId: string) => void;
+  sendConnectionRequest: (user: { id: string; displayName?: string }, note?: string) => Promise<boolean>;
+  acceptConnectionRequest: (requestId: string) => Promise<void>;
+  declineConnectionRequest: (requestId: string) => Promise<void>;
+  cancelConnectionRequest: (requestId: string) => Promise<void>;
+  blockConnectionUser: (targetId: string) => Promise<void>;
   hasSentRequestTo: (userId: string) => boolean;
   isConnectedWith: (userId: string) => boolean;
+  refreshConnections: () => Promise<void>;
 }
 
 const ConnectionsContext = createContext<ConnectionsContextType | undefined>(undefined);
 
 export function ConnectionsProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, firebaseUser } = useAuth();
   const [exploreUsers, setExploreUsers] = useState<DiscoverableUser[]>([]);
   const [requests, setRequests] = useState<StoredConnectionRequest[]>([]);
   const [connections, setConnections] = useState<ConnectedFriend[]>([]);
+  const backendUrl = getBackendUrl();
 
-  // Load real registered users (excluding current user) who are discoverable
-  useEffect(() => {
+  const authFetch = useCallback(
+    async (path: string, init?: RequestInit) => {
+      if (!firebaseUser) throw new Error("Not authenticated");
+      const token = await firebaseUser.getIdToken();
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        ...init?.headers,
+      };
+      return fetch(`${backendUrl}/api/v1${path}`, { ...init, headers });
+    },
+    [firebaseUser, backendUrl]
+  );
+
+  // Fetch real connections from MongoDB
+  const fetchConnections = useCallback(async () => {
+    if (!firebaseUser) return;
     try {
-      const storedUsersRaw = localStorage.getItem("plexochat_registered_users");
-      if (storedUsersRaw) {
-        const parsedUsers = JSON.parse(storedUsersRaw);
-        // Exclude current authenticated user
-        const otherUsers = (parsedUsers as UserProfile[])
-          .filter((u) => u.username !== user?.username && u.id !== user?.id && u.isDiscoverable !== false)
-          .map((u): DiscoverableUser => {
-            // Coordinate mapping based on approximate city or country
-            return {
-              id: u.id,
-              username: u.username,
-              displayName: u.displayName,
-              avatarBg: u.avatarBg || "from-blue-600 to-indigo-600",
-              city: u.city || "",
-              country: u.country || "",
-              countryFlag: u.countryFlag || "🌐",
-              mapCoords: { x: 50, y: 50 },
-              languagesSpoken: u.languagesSpoken || [u.preferredLanguageName || "English"],
-              languagesLearning: u.languagesLearning || [],
-              interests: u.interests || [],
-              bio: u.bio || "",
-              online: true,
-              isStrongMatch: false,
-              matchScore: 85,
-            };
-          });
-        queueMicrotask(() => setExploreUsers(otherUsers));
-      } else {
-        queueMicrotask(() => setExploreUsers([]));
+      const res = await authFetch("/connections");
+      if (!res.ok) {
+        console.warn("Failed to fetch connections:", res.status);
+        return;
       }
-    } catch (e) {
-      console.error("Failed to load registered users", e);
-      queueMicrotask(() => setExploreUsers([]));
+      const data = await res.json();
+      const mappedConns: ConnectedFriend[] = (data || []).map((c: any) => ({
+        id: c.id,
+        userId: c.peer_user_id,
+        displayName: c.peer_profile?.display_name || "User",
+        username: c.peer_profile?.username || "user",
+        avatarBg: "from-blue-600 to-indigo-600",
+        countryFlag: "🌐",
+        city: "",
+        country: "",
+        languagesSpoken: [c.peer_profile?.preferred_receiving_language || "English"],
+        languagesLearning: [],
+        chatId: c.id,
+        lastActive: "Connected",
+        online: true,
+      }));
+      setConnections(mappedConns);
+    } catch (err) {
+      console.warn("Error fetching connections:", err);
     }
-  }, [user]);
+  }, [firebaseUser, authFetch]);
 
-  // Load user-specific connection requests and friends
-  useEffect(() => {
-    if (!user) {
-      queueMicrotask(() => {
-        setRequests([]);
-        setConnections([]);
-      });
-      return;
-    }
-
+  // Fetch incoming and outgoing connection requests from MongoDB
+  const fetchRequests = useCallback(async () => {
+    if (!firebaseUser) return;
     try {
-      const storedReqs = localStorage.getItem(`plexochat_reqs_${user.id}`);
-      const storedConns = localStorage.getItem(`plexochat_conns_${user.id}`);
-      queueMicrotask(() => {
-        setRequests(storedReqs ? JSON.parse(storedReqs) : []);
-        setConnections(storedConns ? JSON.parse(storedConns) : []);
-      });
-    } catch (e) {
-      console.error("Failed to load user connections", e);
-      queueMicrotask(() => {
-        setRequests([]);
-        setConnections([]);
-      });
-    }
-  }, [user]);
+      const [inRes, outRes] = await Promise.all([
+        authFetch("/connections/requests/incoming"),
+        authFetch("/connections/requests/outgoing"),
+      ]);
 
-  const saveRequests = (newReqs: StoredConnectionRequest[]) => {
-    setRequests(newReqs);
-    if (user) {
-      try {
-        localStorage.setItem(`plexochat_reqs_${user.id}`, JSON.stringify(newReqs));
-      } catch (e) {
-        console.error(e);
-      }
-    }
-  };
+      const inData = inRes.ok ? await inRes.json() : [];
+      const outData = outRes.ok ? await outRes.json() : [];
 
-  const saveConnections = (newConns: ConnectedFriend[]) => {
-    setConnections(newConns);
-    if (user) {
-      try {
-        localStorage.setItem(`plexochat_conns_${user.id}`, JSON.stringify(newConns));
-      } catch (e) {
-        console.error(e);
-      }
+      const mappedIn: StoredConnectionRequest[] = inData.map((r: any) => ({
+        id: r.id,
+        type: "incoming",
+        userId: r.sender_id,
+        displayName: r.peer_profile?.display_name || "User",
+        username: r.peer_profile?.username || "user",
+        avatarBg: "from-blue-600 to-indigo-600",
+        countryFlag: "🌐",
+        city: "",
+        country: "",
+        languagesSpoken: [r.peer_profile?.preferred_receiving_language || "English"],
+        languagesLearning: [],
+        note: r.note || "Hi, I'd like to connect on PlexoChat!",
+        sentAt: new Date(r.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "pending",
+      }));
+
+      const mappedOut: StoredConnectionRequest[] = outData.map((r: any) => ({
+        id: r.id,
+        type: "outgoing",
+        userId: r.receiver_id,
+        displayName: r.peer_profile?.display_name || "User",
+        username: r.peer_profile?.username || "user",
+        avatarBg: "from-blue-600 to-indigo-600",
+        countryFlag: "🌐",
+        city: "",
+        country: "",
+        languagesSpoken: [r.peer_profile?.preferred_receiving_language || "English"],
+        languagesLearning: [],
+        note: r.note || "Connection request sent",
+        sentAt: new Date(r.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "pending",
+      }));
+
+      setRequests([...mappedIn, ...mappedOut]);
+    } catch (err) {
+      console.warn("Error fetching connection requests:", err);
     }
-  };
+  }, [firebaseUser, authFetch]);
+
+  const refreshConnections = useCallback(async () => {
+    await Promise.all([fetchConnections(), fetchRequests()]);
+  }, [fetchConnections, fetchRequests]);
+
+  // Load initially when user / firebaseUser is ready
+  useEffect(() => {
+    if (firebaseUser) {
+      refreshConnections();
+    } else {
+      setConnections([]);
+      setRequests([]);
+    }
+  }, [firebaseUser, refreshConnections]);
 
   const pendingIncomingCount = requests.filter(
     (r) => r.type === "incoming" && r.status === "pending"
@@ -131,64 +157,86 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
     return connections.some((c) => c.userId === userId);
   };
 
-  const sendConnectionRequest = (targetUser: DiscoverableUser, note?: string) => {
-    if (hasSentRequestTo(targetUser.id) || isConnectedWith(targetUser.id)) return false;
-
-    const newReq: StoredConnectionRequest = {
-      id: "req-out-" + Date.now(),
-      type: "outgoing",
-      userId: targetUser.id,
-      displayName: targetUser.displayName,
-      username: targetUser.username,
-      avatarBg: targetUser.avatarBg,
-      countryFlag: targetUser.countryFlag,
-      city: targetUser.city,
-      country: targetUser.country,
-      languagesSpoken: targetUser.languagesSpoken,
-      languagesLearning: targetUser.languagesLearning,
-      note: note?.trim() || `Hi ${targetUser.displayName}, I would love to connect and exchange languages!`,
-      sentAt: "Just now",
-      status: "pending",
-    };
-
-    saveRequests([newReq, ...requests]);
-    return true;
+  const sendConnectionRequest = async (
+    targetUser: { id: string; displayName?: string },
+    note?: string
+  ): Promise<boolean> => {
+    try {
+      const res = await authFetch("/connections/requests", {
+        method: "POST",
+        body: JSON.stringify({
+          target_user_id: targetUser.id,
+          note: note?.trim() || undefined,
+        }),
+      });
+      if (res.ok) {
+        await fetchRequests();
+        return true;
+      } else {
+        const err = await res.json().catch(() => ({}));
+        console.warn("Connection request rejected:", err);
+        return false;
+      }
+    } catch (e) {
+      console.error("Failed to send connection request", e);
+      return false;
+    }
   };
 
-  const acceptConnectionRequest = (requestId: string) => {
-    const req = requests.find((r) => r.id === requestId);
-    if (!req) return;
-
-    const newFriend: ConnectedFriend = {
-      id: "conn-" + Date.now(),
-      userId: req.userId,
-      displayName: req.displayName,
-      username: req.username,
-      avatarBg: req.avatarBg,
-      countryFlag: req.countryFlag,
-      city: req.city,
-      country: req.country,
-      languagesSpoken: req.languagesSpoken,
-      languagesLearning: req.languagesLearning,
-      chatId: "chat-" + Date.now(),
-      lastActive: "Active now",
-      online: true,
-    };
-
-    saveConnections([newFriend, ...connections]);
-    saveRequests(requests.filter((r) => r.id !== requestId));
+  const acceptConnectionRequest = async (requestId: string) => {
+    try {
+      const res = await authFetch(`/connections/requests/${requestId}/accept`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        await refreshConnections();
+      }
+    } catch (e) {
+      console.error("Failed to accept connection request", e);
+    }
   };
 
-  const declineConnectionRequest = (requestId: string) => {
-    saveRequests(requests.filter((r) => r.id !== requestId));
+  const declineConnectionRequest = async (requestId: string) => {
+    try {
+      const res = await authFetch(`/connections/requests/${requestId}/decline`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        await fetchRequests();
+      }
+    } catch (e) {
+      console.error("Failed to decline connection request", e);
+    }
   };
 
-  const cancelConnectionRequest = (requestId: string) => {
-    saveRequests(requests.filter((r) => r.id !== requestId));
+  const cancelConnectionRequest = async (requestId: string) => {
+    // Decline or remove
+    await declineConnectionRequest(requestId);
   };
 
-  const blockConnectionUser = (requestId: string) => {
-    saveRequests(requests.filter((r) => r.id !== requestId));
+  const blockConnectionUser = async (targetIdOrReqId: string) => {
+    try {
+      // If targetIdOrReqId is a request ID, find the target userId
+      let targetUserId = targetIdOrReqId;
+      const matchingReq = requests.find((r) => r.id === targetIdOrReqId);
+      if (matchingReq) {
+        targetUserId = matchingReq.userId;
+      } else {
+        const matchingConn = connections.find((c) => c.id === targetIdOrReqId);
+        if (matchingConn) {
+          targetUserId = matchingConn.userId;
+        }
+      }
+
+      const res = await authFetch(`/connections/${targetUserId}/block`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        await refreshConnections();
+      }
+    } catch (e) {
+      console.error("Failed to block user", e);
+    }
   };
 
   return (
@@ -205,6 +253,7 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
         blockConnectionUser,
         hasSentRequestTo,
         isConnectedWith,
+        refreshConnections,
       }}
     >
       {children}

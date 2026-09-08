@@ -13,6 +13,47 @@ import {
 } from "firebase/auth";
 import { auth, googleProvider } from "./firebase";
 
+/**
+ * Resolves the backend base URL.
+ * Prefers NEXT_PUBLIC_API_URL, but dynamically maps localhost to the current hostname
+ * if accessed from another device (e.g. smartphone on the same Wi-Fi).
+ */
+export const getBackendUrl = (): string => {
+  if (typeof window !== "undefined") {
+    const configured = process.env.NEXT_PUBLIC_API_URL;
+    if (configured) {
+      try {
+        const url = new URL(configured);
+        if (
+          (url.hostname === "localhost" || url.hostname === "127.0.0.1") &&
+          window.location.hostname !== "localhost" &&
+          window.location.hostname !== "127.0.0.1"
+        ) {
+          url.hostname = window.location.hostname;
+          return url.origin;
+        }
+        return configured;
+      } catch {
+        return configured;
+      }
+    }
+    return `${window.location.protocol}//${window.location.hostname}:8000`;
+  }
+  return process.env.NEXT_PUBLIC_API_URL || "http://192.168.0.145:8000";
+};
+
+export const getWebSocketUrl = (path: string = "/api/v1/ws"): string => {
+  if (process.env.NEXT_PUBLIC_WS_URL) {
+    return `${process.env.NEXT_PUBLIC_WS_URL.replace(/\/$/, "")}${path}`;
+  }
+  const httpUrl = getBackendUrl();
+  const wsUrl = httpUrl.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
+  return `${wsUrl.replace(/\/$/, "")}${path}`;
+};
+
+const BACKEND_URL = getBackendUrl();
+
+
 export interface UserProfile {
   id: string;
   email?: string;
@@ -92,6 +133,8 @@ export function getFirebaseErrorMessage(error: unknown): string {
       return "This authentication method is currently disabled in your Firebase console. Please enable Email/Password and Google in Firebase Console > Authentication > Sign-in method.";
     case "auth/network-request-failed":
       return "Network error. Please check your internet connection and try again.";
+    case "auth/auth-domain-config-required":
+      return "Firebase authDomain configuration is required. Please check your environment variables.";
     default:
       return (error as Error)?.message || "Authentication failed. Please try again.";
   }
@@ -116,6 +159,48 @@ const saveRegisteredUser = (profile: UserProfile) => {
   localStorage.setItem("plexochat_registered_users", JSON.stringify(updated));
 };
 
+interface BackendSyncResponse {
+  user_id: string;
+  firebase_uid: string;
+  username: string;
+  plexochat_id: string;
+  email?: string;
+  display_name?: string;
+  photo_url?: string;
+  preferred_receiving_language?: string;
+}
+
+/**
+ * Syncs the Firebase user to the PlexoChat backend (MongoDB upsert) and returns the DB user profile.
+ */
+async function syncUserToBackend(fbUser: FirebaseUser): Promise<BackendSyncResponse | null> {
+  try {
+    const token = await fbUser.getIdToken();
+    const res = await fetch(`${BACKEND_URL}/api/v1/auth/sync`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      console.warn("[PlexoChat] Backend sync failed:", res.status, body);
+      return null;
+    } else {
+      const data: BackendSyncResponse = await res.json();
+      console.info(
+        `[PlexoChat] User synced to MongoDB: id=${data.user_id} (uid=${data.firebase_uid})`
+      );
+      return data;
+    }
+  } catch (err) {
+    console.warn("[PlexoChat] Backend sync error (non-fatal):", err);
+    return null;
+  }
+}
+
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
@@ -124,13 +209,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Sync with Firebase auth state
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       setFirebaseUser(fbUser);
 
       if (fbUser) {
+        // Sync to backend MongoDB to get MongoDB _id and handle
+        const syncData = await syncUserToBackend(fbUser);
+
         const registered = getRegisteredUsers();
         let found = registered.find(
           (u) =>
+            u.id === (syncData?.user_id || fbUser.uid) ||
             u.id === fbUser.uid ||
             (fbUser.email && u.email?.toLowerCase() === fbUser.email.toLowerCase())
         );
@@ -139,17 +228,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const emailPrefix = fbUser.email
             ? fbUser.email.split("@")[0].replace(/[^a-z0-9_]/gi, "").toLowerCase()
             : "";
-          const fallbackUsername = emailPrefix || "user_" + fbUser.uid.slice(0, 6);
+          const fallbackUsername = syncData?.username || emailPrefix || "user_" + fbUser.uid.slice(0, 6);
 
           found = {
-            id: fbUser.uid,
+            id: syncData?.user_id || fbUser.uid,
             email: fbUser.email || undefined,
             username: fallbackUsername,
-            displayName: fbUser.displayName || fallbackUsername,
-            plexoChatId: "PX-" + Math.floor(1000 + Math.random() * 9000) + "-G",
-            preferredReceivingLanguage: "en",
+            displayName: syncData?.display_name || fbUser.displayName || fallbackUsername,
+            plexoChatId: syncData?.plexochat_id || "@" + fallbackUsername,
+            preferredReceivingLanguage: syncData?.preferred_receiving_language || "en",
             preferredLanguageName: "English",
-            avatarUrl: fbUser.photoURL || undefined,
+            avatarUrl: syncData?.photo_url || fbUser.photoURL || undefined,
             avatarBg: "from-blue-600 to-indigo-600",
             languagesSpoken: ["English"],
             languagesLearning: [],
@@ -162,8 +251,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           };
           saveRegisteredUser(found);
         } else {
-          // Keep profile updated with latest Firebase provider metadata if available
           let changed = false;
+          if (syncData?.user_id && found.id !== syncData.user_id) {
+            found.id = syncData.user_id;
+            changed = true;
+          }
+          if (syncData?.username && found.username !== syncData.username) {
+            found.username = syncData.username;
+            changed = true;
+          }
+          if (syncData?.plexochat_id && found.plexoChatId !== syncData.plexochat_id) {
+            found.plexoChatId = syncData.plexochat_id;
+            changed = true;
+          }
           if (fbUser.photoURL && !found.avatarUrl) {
             found.avatarUrl = fbUser.photoURL;
             changed = true;

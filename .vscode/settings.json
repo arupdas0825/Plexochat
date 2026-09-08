@@ -1,5 +1,11 @@
 {
   "css.lint.unknownAtRules": "ignore",
   "scss.lint.unknownAtRules": "ignore",
-  "less.lint.unknownAtRules": "ignore"
+  "less.lint.unknownAtRules": "ignore",
+  "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv/Scripts/python.exe",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/backend"
+  ],
+  "python.analysis.pythonPath": "${workspaceFolder}/backend/.venv/Scripts/python.exe",
+  "python.pyrefly.pythonInterpreterPath": "${workspaceFolder}/backend/.venv/Scripts/python.exe"
 }

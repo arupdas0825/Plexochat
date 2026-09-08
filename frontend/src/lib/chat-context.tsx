@@ -1,8 +1,9 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 import { ChatThread, ChatMessage, ChatUser } from "./mock-chat-data";
-import { useAuth } from "./auth-context";
+import { useAuth, getWebSocketUrl } from "./auth-context";
+import { useConnections } from "./connections-context";
 
 interface ChatContextType {
   threads: ChatThread[];
@@ -16,40 +17,203 @@ interface ChatContextType {
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, firebaseUser } = useAuth();
+  const { connections, refreshConnections } = useConnections();
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
-  // Load threads for the authenticated user
+  // Sync threads with accepted connections
   useEffect(() => {
     if (!user) {
-      queueMicrotask(() => {
-        setThreads([]);
-        setActiveThreadId(null);
-      });
+      setThreads([]);
+      setActiveThreadId(null);
       return;
     }
 
+    // Load persisted local thread message history
+    let existingThreads: ChatThread[] = [];
     try {
       const storageKey = `plexochat_threads_${user.id}`;
       const saved = localStorage.getItem(storageKey);
       if (saved) {
-        const parsed = JSON.parse(saved);
-        queueMicrotask(() => {
-          setThreads(parsed);
-          setActiveThreadId((prev) => (parsed.length > 0 && !prev ? parsed[0].id : prev));
-        });
-      } else {
-        queueMicrotask(() => {
-          setThreads([]);
-          setActiveThreadId(null);
-        });
+        existingThreads = JSON.parse(saved);
       }
     } catch (e) {
-      console.error("Failed to load threads", e);
-      queueMicrotask(() => setThreads([]));
+      console.error("Failed to load threads from storage", e);
     }
-  }, [user]);
+
+    // Ensure every accepted connection has a thread
+    const connectionIds = new Set(connections.map((c) => c.userId));
+    const mergedThreads: ChatThread[] = [...existingThreads];
+
+    connections.forEach((conn) => {
+      const foundIdx = mergedThreads.findIndex(
+        (t) => t.participant.id === conn.userId || t.participant.username === conn.username
+      );
+      const participant: ChatUser = {
+        id: conn.userId,
+        username: conn.username,
+        displayName: conn.displayName,
+        plexoChatId: `@${conn.username}`,
+        avatarBg: conn.avatarBg || "from-blue-600 to-indigo-600",
+        preferredLanguage: conn.languagesSpoken?.[0] || "English",
+        languageCode: "en",
+        online: conn.online,
+      };
+
+      if (foundIdx === -1) {
+        // Create new empty thread for accepted connection
+        const newThread: ChatThread = {
+          id: `chat-${conn.userId}`,
+          participant,
+          lastMessage: {
+            id: `welcome-${conn.id}`,
+            senderId: "system",
+            senderName: "PlexoChat",
+            originalText: "Connected! End-to-end encrypted messaging unlocked.",
+            translatedText: "Connected! End-to-end encrypted messaging unlocked.",
+            originalLang: "English",
+            targetLangCode: "EN",
+            timestamp: new Date().toISOString(),
+            status: "delivered",
+          },
+          unreadCount: 0,
+          messages: [],
+        };
+        mergedThreads.push(newThread);
+      } else {
+        // Update participant details
+        mergedThreads[foundIdx] = {
+          ...mergedThreads[foundIdx],
+          participant,
+        };
+      }
+    });
+
+    setThreads(mergedThreads);
+    setActiveThreadId((prev) => (mergedThreads.length > 0 && !prev ? mergedThreads[0].id : prev));
+  }, [user, connections]);
+
+  // Connect to WebSocket relay
+  useEffect(() => {
+    if (!firebaseUser) {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      return;
+    }
+
+    let isSubscribed = true;
+    let socket: WebSocket | null = null;
+    let reconnectTimeout: NodeJS.Timeout | null = null;
+
+    const connectWebSocket = async () => {
+      try {
+        const token = await firebaseUser.getIdToken();
+        if (!isSubscribed) return;
+
+        const wsBase = getWebSocketUrl();
+        const fullWsUrl = `${wsBase}?token=${encodeURIComponent(token)}`;
+        socket = new WebSocket(fullWsUrl);
+        wsRef.current = socket;
+
+        socket.onopen = () => {
+          console.info("[PlexoChat WS] Connected to message relay");
+        };
+
+        socket.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+
+            if (data.type === "message") {
+              const fromUserId = data.from_user_id;
+              const newMsg: ChatMessage = {
+                id: data.client_message_id || `msg-${Date.now()}`,
+                senderId: fromUserId,
+                senderName: "Peer",
+                originalText: data.text,
+                translatedText: data.text,
+                originalLang: "English",
+                targetLangCode: "EN",
+                timestamp: data.timestamp || new Date().toISOString(),
+                status: "delivered",
+              };
+
+              setThreads((prev) => {
+                let matched = false;
+                const updated = prev.map((th) => {
+                  if (th.participant.id === fromUserId) {
+                    matched = true;
+                    return {
+                      ...th,
+                      lastMessage: newMsg,
+                      messages: [...th.messages, newMsg],
+                      unreadCount: th.id === activeThreadId ? 0 : (th.unreadCount || 0) + 1,
+                    };
+                  }
+                  return th;
+                });
+                return updated;
+              });
+
+              // Send delivery ack back to server
+              if (socket && socket.readyState === WebSocket.OPEN && data.client_message_id) {
+                socket.send(
+                  JSON.stringify({
+                    type: "ack",
+                    client_message_id: data.client_message_id,
+                  })
+                );
+              }
+            } else if (
+              data.type === "CONNECTION_REQUEST_RECEIVED" ||
+              data.type === "CONNECTION_ACCEPTED" ||
+              data.type === "CONNECTION_REVOKED"
+            ) {
+              refreshConnections();
+            } else if (data.type === "presence") {
+              setThreads((prev) =>
+                prev.map((th) =>
+                  th.participant.id === data.user_id
+                    ? { ...th, participant: { ...th.participant, online: data.status === "online" } }
+                    : th
+                )
+              );
+            }
+          } catch (err) {
+            console.warn("[PlexoChat WS] Error processing message frame:", err);
+          }
+        };
+
+        socket.onclose = () => {
+          console.info("[PlexoChat WS] Closed — attempting reconnect in 3s");
+          if (isSubscribed) {
+            reconnectTimeout = setTimeout(connectWebSocket, 3000);
+          }
+        };
+
+        socket.onerror = (err) => {
+          console.warn("[PlexoChat WS] Socket error:", err);
+        };
+      } catch (err) {
+        console.warn("[PlexoChat WS] Connection error:", err);
+        if (isSubscribed) {
+          reconnectTimeout = setTimeout(connectWebSocket, 3000);
+        }
+      }
+    };
+
+    connectWebSocket();
+
+    return () => {
+      isSubscribed = false;
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (socket) socket.close();
+      wsRef.current = null;
+    };
+  }, [firebaseUser, refreshConnections, activeThreadId]);
 
   const saveThreads = (updatedThreads: ChatThread[]) => {
     setThreads(updatedThreads);
@@ -67,7 +231,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const selectThread = (id: string | null) => {
     setActiveThreadId(id);
     if (id) {
-      // Mark as read
       const updated = threads.map((th) => (th.id === id ? { ...th, unreadCount: 0 } : th));
       saveThreads(updated);
     }
@@ -77,12 +240,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     const thread = threads.find((t) => t.id === threadId);
     if (!thread) return;
 
+    const clientMsgId = "msg-" + Date.now() + "-" + Math.random().toString(36).substring(2, 7);
+
     const newMsg: ChatMessage = {
-      id: "msg-" + Date.now(),
+      id: clientMsgId,
       senderId: "me",
       senderName: user?.displayName || "You",
       originalText: text,
-      translatedText: text, // In local demo/production, plaintext is encrypted and delivered
+      translatedText: text,
       originalLang: user?.preferredLanguageName || "English",
       targetLangCode: thread.participant.languageCode || "EN",
       timestamp: new Date().toISOString(),
@@ -103,6 +268,18 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     });
 
     saveThreads(updated);
+
+    // Relay through WebSocket if open
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(
+        JSON.stringify({
+          type: "message",
+          to_user_id: thread.participant.id,
+          text,
+          client_message_id: clientMsgId,
+        })
+      );
+    }
   };
 
   const startChatWithUser = (targetUser: ChatUser, initialText?: string): string => {
@@ -112,7 +289,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       return existing.id;
     }
 
-    const newId = "chat-" + Date.now();
+    const newId = `chat-${targetUser.id}`;
     const welcomeMsg: ChatMessage = {
       id: "msg-" + Date.now(),
       senderId: "me",

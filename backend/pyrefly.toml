@@ -1,0 +1,3 @@
+# Pyrefly configuration for PlexoChat Backend
+python-interpreter-path = "d:/PlexoChat/backend/.venv/Scripts/python.exe"
+search-path = ["."]

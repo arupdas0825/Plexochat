@@ -10,7 +10,7 @@ export interface ChatUser {
   plexoChatId: string;
   avatarBg: string;
   preferredLanguage: string;
-  languageCode: string;
+  languageCode?: string;
   online: boolean;
 }
 

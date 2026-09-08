@@ -1,9 +1,9 @@
 PlexoChat Proprietary License
 Version 1.0
 
-Copyright (c) 2026 [Your Name / Company Name]. All Rights Reserved.
+Copyright (c) 2026 [** Arup Das **]. All Rights Reserved.
 
-"PlexoChat" and the PlexoChat logo are trademarks of [Your Name / Company Name]
+"PlexoChat" and the PlexoChat logo are trademarks of [** Arup Das **]
 (see TRADEMARK.md). This license governs use of the source code and other
 files in this repository ("the Software"). It does not grant any rights to
 the PlexoChat name, logo, or brand assets beyond what is explicitly stated
@@ -60,7 +60,7 @@ in TRADEMARK.md.
 
 8. CONTACT
    For licensing inquiries, commercial use requests, or permission
-   requests, contact: [your-email@example.com]
+   requests, contact: [arupworks.at@gmail.com]
 
 ---
 This is a template proprietary license. Replace bracketed placeholders
