@@ -94,11 +94,27 @@ async def search_users(
     await rate_limiter.check(f"search:{current_user.id}", max_requests=30, window_seconds=60)
 
     clean_query = q.strip()
-    if len(clean_query) < 2:
+    # Support searching with or without leading '@' (e.g. '@upsellinglive' or 'upsellinglive')
+    query_variants = [clean_query]
+    if clean_query.startswith("@"):
+        stripped = clean_query.lstrip("@").strip()
+        if stripped:
+            query_variants.append(stripped)
+
+    # Filter to variants with at least 2 characters
+    valid_variants = [v for v in query_variants if len(v) >= 2]
+    if not valid_variants:
         return []
 
-    safe_regex = re.escape(clean_query)
-    regex_pattern = {"$regex": safe_regex, "$options": "i"}
+    or_clauses = []
+    for var in valid_variants:
+        safe_regex = re.escape(var)
+        regex_pattern = {"$regex": safe_regex, "$options": "i"}
+        or_clauses.extend([
+            {"username": regex_pattern},
+            {"plexochat_id": regex_pattern},
+            {"display_name": regex_pattern},
+        ])
 
     # Exclude blocked users & current user
     blocked_ids = await _get_blocked_user_ids(current_user.id)
@@ -107,13 +123,7 @@ async def search_users(
     users_col = get_users_collection()
     query_filter: dict = {
         "$and": [
-            {
-                "$or": [
-                    {"username": regex_pattern},
-                    {"plexochat_id": regex_pattern},
-                    {"display_name": regex_pattern},
-                ]
-            }
+            {"$or": or_clauses}
         ]
     }
 

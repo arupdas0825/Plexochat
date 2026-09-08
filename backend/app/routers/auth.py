@@ -61,35 +61,11 @@ def _sanitize_plexochat_id(candidate: str) -> str:
     return clean[:30]
 
 
-@router.post(
-    "/auth/sync",
-    response_model=SyncResponse,
-    summary="Sync Firebase user to MongoDB",
-    description=(
-        "Verifies a Firebase ID token and upserts the user into the MongoDB `users` collection. "
-        "Called by the frontend after every successful Firebase login. "
-        "Only safe profile fields are stored — no passwords, no tokens."
-    ),
-)
-async def sync_firebase_user(
-    authorization: Optional[str] = Header(None),
-) -> SyncResponse:
-    """Verifies the Firebase ID token and upserts the user document."""
-    # ── 1. Parse Authorization header ────────────────────────────────────────
-    if not authorization:
-        raise AuthenticationError("Missing Authorization header.")
+async def sync_firebase_user_record(claims: dict) -> tuple[dict, bool]:
+    """Ensures a Firebase-authenticated user document exists and is up to date in MongoDB.
 
-    parts = authorization.split()
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise AuthenticationError(
-            "Invalid Authorization header format. Expected 'Bearer <token>'."
-        )
-
-    token = parts[1]
-
-    # ── 2. Verify Firebase ID token ──────────────────────────────────────────
-    claims = verify_firebase_id_token(token)
-
+    Returns (user_doc, is_new_user).
+    """
     firebase_uid: str = claims.get("uid") or claims.get("sub") or ""
     if not firebase_uid:
         raise AuthenticationError("Invalid token: missing UID claim.")
@@ -99,13 +75,9 @@ async def sync_firebase_user(
     photo_url: Optional[str] = claims.get("picture")
     email_verified: bool = bool(claims.get("email_verified", False))
 
-    logger.info(f"Syncing Firebase user uid={firebase_uid} email={email}")
-
-    # ── 3. Upsert into MongoDB ───────────────────────────────────────────────
     now = datetime.now(timezone.utc)
     users_col = get_users_collection()
 
-    # Check if user already exists
     existing = await users_col.find_one({"firebase_uid": firebase_uid})
 
     clean_display_name = (display_name or (email.split("@")[0] if email else f"User {firebase_uid[:6]}")).strip()[:50]
@@ -196,9 +168,44 @@ async def sync_firebase_user(
         is_new_user = True
         logger.info(f"New user created: uid={firebase_uid} id={result['_id']}")
 
+    return result, is_new_user
+
+
+@router.post(
+    "/auth/sync",
+    response_model=SyncResponse,
+    summary="Sync Firebase user to MongoDB",
+    description=(
+        "Verifies a Firebase ID token and upserts the user into the MongoDB `users` collection. "
+        "Called by the frontend after every successful Firebase login. "
+        "Only safe profile fields are stored — no passwords, no tokens."
+    ),
+)
+async def sync_firebase_user(
+    authorization: Optional[str] = Header(None),
+) -> SyncResponse:
+    """Verifies the Firebase ID token and upserts the user document."""
+    # ── 1. Parse Authorization header ────────────────────────────────────────
+    if not authorization:
+        raise AuthenticationError("Missing Authorization header.")
+
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise AuthenticationError(
+            "Invalid Authorization header format. Expected 'Bearer <token>'."
+        )
+
+    token = parts[1]
+
+    # ── 2. Verify Firebase ID token ──────────────────────────────────────────
+    claims = verify_firebase_id_token(token)
+
+    # ── 3. Upsert into MongoDB ───────────────────────────────────────────────
+    result, is_new_user = await sync_firebase_user_record(claims)
+
     return SyncResponse(
         user_id=str(result["_id"]),
-        firebase_uid=firebase_uid,
+        firebase_uid=result["firebase_uid"],
         username=result["username"],
         plexochat_id=result["plexochat_id"],
         email=result.get("email"),

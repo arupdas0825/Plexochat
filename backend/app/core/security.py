@@ -107,11 +107,10 @@ async def get_current_user_from_token(token: str) -> User:
     users_col = get_users_collection()
     doc = await users_col.find_one({"firebase_uid": firebase_uid})
     if not doc:
-        # User has authenticated with Firebase but has not yet called /api/v1/auth/bootstrap
-        raise AuthenticationError(
-            message="User profile not bootstrapped. Please complete profile setup.",
-            internal_details=f"No user document found for firebase_uid {firebase_uid}",
-        )
+        # User has authenticated with Firebase but MongoDB record not yet synced.
+        # Auto-provision on the fly to prevent blocking the user.
+        from app.routers.auth import sync_firebase_user_record
+        doc, _ = await sync_firebase_user_record(claims)
 
     doc["_id"] = str(doc["_id"])
     if not doc.get("display_name"):

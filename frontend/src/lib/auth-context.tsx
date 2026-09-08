@@ -14,44 +14,121 @@ import {
 import { auth, googleProvider } from "./firebase";
 
 /**
+ * Detects whether a hostname is a private or local network address
+ * (RFC 1918 / RFC 4193 / loopback / mDNS).
+ */
+function isPrivateOrLocalHost(hostname: string): boolean {
+  if (!hostname) return true;
+  const cleanHost = hostname.trim().toLowerCase();
+  return (
+    cleanHost === "localhost" ||
+    cleanHost === "127.0.0.1" ||
+    cleanHost === "0.0.0.0" ||
+    cleanHost === "::1" ||
+    cleanHost.startsWith("192.168.") ||
+    cleanHost.startsWith("10.") ||
+    cleanHost.endsWith(".local") ||
+    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(cleanHost)
+  );
+}
+
+const DEFAULT_PROD_API_URL = "https://plexochat-backend.onrender.com";
+
+/**
  * Resolves the backend base URL.
- * Prefers NEXT_PUBLIC_API_URL, but dynamically maps localhost to the current hostname
- * if accessed from another device (e.g. smartphone on the same Wi-Fi).
+ * - On public domains (like plexochat.vercel.app):
+ *   Strictly uses a valid public HTTPS backend URL.
+ *   Guarantees that private LAN IPs (192.168.x.x, 10.x.x.x, localhost) are NEVER returned,
+ *   which prevents Chrome's "wants to access other devices on your local network" prompt.
+ * - In local development (localhost / 127.0.0.1):
+ *   Uses configured local URL or defaults to http://localhost:8000.
  */
 export const getBackendUrl = (): string => {
+  const configured = (process.env.NEXT_PUBLIC_API_URL || "").trim();
+
   if (typeof window !== "undefined") {
-    const configured = process.env.NEXT_PUBLIC_API_URL;
-    if (configured) {
-      try {
-        const url = new URL(configured);
-        if (
-          (url.hostname === "localhost" || url.hostname === "127.0.0.1") &&
-          window.location.hostname !== "localhost" &&
-          window.location.hostname !== "127.0.0.1"
-        ) {
-          url.hostname = window.location.hostname;
-          return url.origin;
+    const isPublicHost = !isPrivateOrLocalHost(window.location.hostname);
+
+    if (isPublicHost) {
+      if (configured) {
+        try {
+          const parsed = new URL(configured);
+          if (!isPrivateOrLocalHost(parsed.hostname)) {
+            return configured.replace(/\/$/, "");
+          }
+        } catch {
+          // ignore parsing failure, fallback to production URL
         }
-        return configured;
-      } catch {
-        return configured;
       }
+      return DEFAULT_PROD_API_URL;
     }
-    return `${window.location.protocol}//${window.location.hostname}:8000`;
+
+    // Local development (localhost / 127.0.0.1)
+    if (configured) {
+      return configured.replace(/\/$/, "");
+    }
+    return "http://localhost:8000";
   }
-  return process.env.NEXT_PUBLIC_API_URL || "http://192.168.0.145:8000";
+
+  // SSR environment
+  if (configured) {
+    try {
+      const parsed = new URL(configured);
+      if (!isPrivateOrLocalHost(parsed.hostname)) {
+        return configured.replace(/\/$/, "");
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return process.env.NODE_ENV === "production" ? DEFAULT_PROD_API_URL : "http://localhost:8000";
 };
 
 export const getWebSocketUrl = (path: string = "/api/v1/ws"): string => {
-  if (process.env.NEXT_PUBLIC_WS_URL) {
-    return `${process.env.NEXT_PUBLIC_WS_URL.replace(/\/$/, "")}${path}`;
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  const configuredWs = (process.env.NEXT_PUBLIC_WS_URL || "").trim();
+
+  if (typeof window !== "undefined") {
+    const isPublicHost = !isPrivateOrLocalHost(window.location.hostname);
+
+    if (isPublicHost) {
+      if (configuredWs) {
+        try {
+          const parsed = new URL(configuredWs);
+          if (!isPrivateOrLocalHost(parsed.hostname)) {
+            return `${configuredWs.replace(/\/$/, "")}${cleanPath}`;
+          }
+        } catch {
+          // ignore
+        }
+      }
+      // Derive from backend URL (https -> wss)
+      const httpUrl = getBackendUrl();
+      const wsUrl = httpUrl.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
+      return `${wsUrl}${cleanPath}`;
+    }
+
+    // Local development
+    if (configuredWs) {
+      return `${configuredWs.replace(/\/$/, "")}${cleanPath}`;
+    }
+    return `ws://localhost:8000${cleanPath}`;
+  }
+
+  if (configuredWs) {
+    try {
+      const parsed = new URL(configuredWs);
+      if (!isPrivateOrLocalHost(parsed.hostname)) {
+        return `${configuredWs.replace(/\/$/, "")}${cleanPath}`;
+      }
+    } catch {
+      // ignore
+    }
   }
   const httpUrl = getBackendUrl();
   const wsUrl = httpUrl.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
-  return `${wsUrl.replace(/\/$/, "")}${path}`;
+  return `${wsUrl}${cleanPath}`;
 };
-
-const BACKEND_URL = getBackendUrl();
 
 
 export interface UserProfile {
@@ -176,7 +253,8 @@ interface BackendSyncResponse {
 async function syncUserToBackend(fbUser: FirebaseUser): Promise<BackendSyncResponse | null> {
   try {
     const token = await fbUser.getIdToken();
-    const res = await fetch(`${BACKEND_URL}/api/v1/auth/sync`, {
+    const backendUrl = getBackendUrl();
+    const res = await fetch(`${backendUrl}/api/v1/auth/sync`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,

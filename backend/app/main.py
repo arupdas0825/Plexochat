@@ -96,15 +96,11 @@ async def request_id_middleware(request: Request, call_next) -> Response:
         request_id_ctx.reset(token)
 
 
-# 2. CORS Middleware locked to known frontend origins (allows Vercel domains in production)
+# 2. CORS Middleware locked to known frontend origins (allows Vercel domains and local dev)
 _cors_origin_regex = settings.CORS_ORIGIN_REGEX
 if not _cors_origin_regex:
-    if settings.ENVIRONMENT == "development":
-        _cors_origin_regex = (
-            r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$"
-        )
-    else:
-        _cors_origin_regex = r"^https://.*\.vercel\.app$"
+    # Always allow any *.vercel.app domain (including preview URLs) and localhost / loopback
+    _cors_origin_regex = r"^(https://.*\.vercel\.app|https?://(localhost|127\.0\.0\.1)(:\d+)?)$"
 
 app.add_middleware(
     CORSMiddleware,
