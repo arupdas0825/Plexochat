@@ -60,6 +60,13 @@ class Settings(BaseSettings):
     MONGODB_DATABASE: str = "PlexoChat"
     MONGODB_DB_NAME: Optional[str] = None
 
+    @field_validator("MONGODB_URI", mode="before")
+    @classmethod
+    def clean_mongodb_uri(cls, v: Any) -> str:
+        if isinstance(v, str):
+            return v.strip().strip("'\"").strip()
+        return v
+
     @property
     def database_name(self) -> str:
         return self.MONGODB_DB_NAME or self.MONGODB_DATABASE or "PlexoChat"

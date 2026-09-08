@@ -1,6 +1,7 @@
 """MongoDB Atlas client initialization and connection management using Motor."""
 
 from typing import Optional
+import certifi
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from app.core.config import settings
 from app.core.logging import logger
@@ -16,7 +17,8 @@ async def connect_to_mongo() -> None:
     try:
         client = AsyncIOMotorClient(
             settings.MONGODB_URI,
-            serverSelectionTimeoutMS=5000,
+            serverSelectionTimeoutMS=10000,
+            tlsCAFile=certifi.where(),
         )
         db = client[settings.database_name]
         # Perform startup ping check
