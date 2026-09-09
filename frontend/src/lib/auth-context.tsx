@@ -33,6 +33,15 @@ function isPrivateOrLocalHost(hostname: string): boolean {
 }
 
 const DEFAULT_PROD_API_URL = "https://plexochat-backend.onrender.com";
+const DEFAULT_PROD_WS_URL = "wss://plexochat-backend.onrender.com/api/v1/ws";
+
+function normalizePath(baseUrl: string, cleanPath: string): string {
+  const stripped = baseUrl.replace(/\/$/, "");
+  if (stripped.endsWith(cleanPath)) {
+    return stripped;
+  }
+  return `${stripped}${cleanPath}`;
+}
 
 /**
  * Resolves the backend base URL.
@@ -96,7 +105,7 @@ export const getWebSocketUrl = (path: string = "/api/v1/ws"): string => {
         try {
           const parsed = new URL(configuredWs);
           if (!isPrivateOrLocalHost(parsed.hostname)) {
-            return `${configuredWs.replace(/\/$/, "")}${cleanPath}`;
+            return normalizePath(configuredWs, cleanPath);
           }
         } catch {
           // ignore
@@ -105,12 +114,12 @@ export const getWebSocketUrl = (path: string = "/api/v1/ws"): string => {
       // Derive from backend URL (https -> wss)
       const httpUrl = getBackendUrl();
       const wsUrl = httpUrl.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
-      return `${wsUrl}${cleanPath}`;
+      return normalizePath(wsUrl, cleanPath);
     }
 
     // Local development
     if (configuredWs) {
-      return `${configuredWs.replace(/\/$/, "")}${cleanPath}`;
+      return normalizePath(configuredWs, cleanPath);
     }
     return `ws://localhost:8000${cleanPath}`;
   }
@@ -119,15 +128,20 @@ export const getWebSocketUrl = (path: string = "/api/v1/ws"): string => {
     try {
       const parsed = new URL(configuredWs);
       if (!isPrivateOrLocalHost(parsed.hostname)) {
-        return `${configuredWs.replace(/\/$/, "")}${cleanPath}`;
+        return normalizePath(configuredWs, cleanPath);
       }
     } catch {
       // ignore
     }
   }
+
+  if (process.env.NODE_ENV === "production") {
+    return DEFAULT_PROD_WS_URL;
+  }
+
   const httpUrl = getBackendUrl();
   const wsUrl = httpUrl.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
-  return `${wsUrl}${cleanPath}`;
+  return normalizePath(wsUrl, cleanPath);
 };
 
 

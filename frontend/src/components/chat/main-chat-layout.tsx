@@ -8,11 +8,13 @@ import { NewChatDialog } from "./new-chat-dialog";
 import { MessageSquare, Plus, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useChat } from "@/lib/chat-context";
+import { useVisualViewport } from "@/lib/use-visual-viewport";
 
 export function MainChatLayout() {
   const { threads, activeThreadId, selectThread, sendMessage } = useChat();
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const viewport = useVisualViewport();
 
   const activeThread = threads.find((t) => t.id === activeThreadId);
 
@@ -40,7 +42,11 @@ export function MainChatLayout() {
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", damping: 32, stiffness: 350 }}
-            className="fixed inset-0 z-30 md:hidden bg-background flex flex-col"
+            style={{
+              height: viewport ? `${viewport.height}px` : "100dvh",
+              top: viewport ? `${viewport.offsetTop}px` : "0px",
+            }}
+            className="fixed left-0 right-0 z-30 md:hidden bg-background flex flex-col overflow-hidden max-h-[100dvh]"
           >
             <ConversationView
               thread={activeThread}

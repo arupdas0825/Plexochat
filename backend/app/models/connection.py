@@ -34,6 +34,7 @@ class UserProfilePublic(BaseModel):
     preferred_receiving_language: str = "en"
     relationship_status: RelationshipStatus = RelationshipStatus.NONE
     connection_request_id: Optional[str] = None
+    online: Optional[bool] = None
 
 
 class ConnectionCreateRequest(BaseModel):

@@ -54,6 +54,7 @@ async def _fetch_public_profile(user_id: str) -> Optional[UserProfilePublic]:
         photo_url=doc.get("photo_url"),
         preferred_receiving_language=doc.get("preferred_receiving_language", "en"),
         relationship_status=RelationshipStatus.ACCEPTED,
+        online=connection_manager.is_online(str(doc["_id"])),
     )
 
 

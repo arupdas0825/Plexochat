@@ -98,6 +98,29 @@ async def _broadcast_presence(
             await connection_manager.send_to_user(peer_id, frame)
 
 
+async def _sync_peers_presence(user: User, websocket: WebSocket) -> None:
+    """Send presence status of all currently-online accepted peers to the newly connected user."""
+    col = get_connections_collection()
+    cursor = col.find(
+        {
+            "$or": [
+                {"user_a_id": user.id},
+                {"user_b_id": user.id},
+            ],
+            "status": "ACCEPTED",
+        }
+    )
+    async for doc in cursor:
+        peer_id = doc["user_b_id"] if doc["user_a_id"] == user.id else doc["user_a_id"]
+        if connection_manager.is_online(peer_id):
+            frame = PresenceFrame(user_id=peer_id, status="online").model_dump()
+            try:
+                await websocket.send_json(frame)
+            except Exception as exc:
+                logger.warning(f"Failed to sync peer presence to user={user.id}: {exc}")
+                break
+
+
 async def _flush_pending_messages(user: User, websocket: WebSocket) -> None:
     """Deliver queued offline messages on reconnect, then delete them immediately.
 
@@ -307,10 +330,13 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     # ── 3. Flush pending offline messages ────────────────────────────────────
     await _flush_pending_messages(user, websocket)
 
-    # ── 4. Broadcast presence=online to accepted connections ─────────────────
+    # ── 4. Sync online presence of peers to the newly connected user ─────────
+    await _sync_peers_presence(user, websocket)
+
+    # ── 5. Broadcast presence=online to accepted connections ─────────────────
     await _broadcast_presence(user, "online")
 
-    # ── 5. Main receive loop ─────────────────────────────────────────────────
+    # ── 6. Main receive loop ─────────────────────────────────────────────────
     try:
         while True:
             raw_text = await websocket.receive_text()
@@ -351,7 +377,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     except Exception as exc:
         logger.exception(f"WS unexpected error for user_id={user.id}: {exc}")
     finally:
-        # ── 6. Cleanup on disconnect ─────────────────────────────────────────
+        # ── 7. Cleanup on disconnect ─────────────────────────────────────────
         await connection_manager.disconnect(user.id, websocket)
-        await _broadcast_presence(user, "offline")
+        if not connection_manager.is_online(user.id):
+            await _broadcast_presence(user, "offline")
+            logger.info(f"User is now offline, broadcasted presence: user_id={user.id}")
+        else:
+            logger.info(f"WS disconnected but user still has active sockets: user_id={user.id}")
         logger.info(f"WS cleanup complete: user_id={user.id}")

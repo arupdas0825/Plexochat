@@ -10,6 +10,8 @@ import {
   Repeat,
   CheckCheck,
   Check,
+  Clock,
+  AlertCircle,
   MoreVertical,
   Paperclip,
   Image as ImageIcon,
@@ -27,42 +29,12 @@ import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { DropdownMenu, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { ChatThread, ChatMessage } from "@/lib/mock-chat-data";
+import { useVisualViewport } from "@/lib/use-visual-viewport";
 
 interface ConversationViewProps {
   thread: ChatThread;
   onBack: () => void;
   onSendMessage: (threadId: string, text: string) => void | Promise<void>;
-}
-
-// VisualViewport keyboard tracker for mobile PWA stability
-function useVisualViewport() {
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.visualViewport) return;
-
-    const updateKeyboard = () => {
-      if (!window.visualViewport) return;
-      const currentHeight = window.visualViewport.height;
-      const windowHeight = window.innerHeight;
-      const diff = windowHeight - currentHeight;
-
-      if (diff > 100) {
-        setKeyboardHeight(diff);
-      } else {
-        setKeyboardHeight(0);
-      }
-    };
-
-    window.visualViewport.addEventListener("resize", updateKeyboard);
-    window.visualViewport.addEventListener("scroll", updateKeyboard);
-    return () => {
-      window.visualViewport?.removeEventListener("resize", updateKeyboard);
-      window.visualViewport?.removeEventListener("scroll", updateKeyboard);
-    };
-  }, []);
-
-  return keyboardHeight;
 }
 
 export function ConversationView({
@@ -84,8 +56,7 @@ export function ConversationView({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const keyboardHeight = useVisualViewport();
+  const viewport = useVisualViewport();
   const participant = thread.participant;
 
   const allMessages = React.useMemo(() => {
@@ -129,6 +100,13 @@ export function ConversationView({
     }
     prevMsgCountRef.current = allMessages.length;
   }, [allMessages.length, scrollToBottom]);
+
+  // Adjust scroll when virtual keyboard opens or visual viewport resizes
+  useEffect(() => {
+    if (viewport?.height) {
+      scrollToBottom(false);
+    }
+  }, [viewport?.height, scrollToBottom]);
 
   // Toggle reveal between translated and original text
   const toggleReveal = (id: string) => {
@@ -432,6 +410,12 @@ export function ConversationView({
                       <span title={msg.status}>
                         {msg.status === "read" ? (
                           <CheckCheck className="w-3 h-3 text-sky-400" />
+                        ) : msg.status === "delivered" ? (
+                          <CheckCheck className="w-3 h-3 opacity-90" />
+                        ) : msg.status === "failed" ? (
+                          <AlertCircle className="w-3 h-3 text-destructive" />
+                        ) : msg.status === "sending" ? (
+                          <Clock className="w-3 h-3 opacity-60 animate-pulse" />
                         ) : (
                           <Check className="w-3 h-3 opacity-80" />
                         )}
@@ -521,13 +505,7 @@ export function ConversationView({
       </AnimatePresence>
 
       {/* 5. Fixed Message Composer */}
-      <div
-        style={{
-          marginBottom: keyboardHeight > 0 ? `${keyboardHeight}px` : "0px",
-          transition: "margin-bottom 0.1s ease-out",
-        }}
-        className="p-2.5 sm:p-3 bg-card border-t border-border/80 z-20 shrink-0 select-none pb-[max(0.65rem,env(safe-area-inset-bottom))]"
-      >
+      <div className="p-2.5 sm:p-3 bg-card border-t border-border/80 z-20 shrink-0 select-none pb-[max(0.65rem,env(safe-area-inset-bottom))]">
         <div className="flex items-end gap-1.5 sm:gap-2 max-w-4xl mx-auto">
           {/* Photo / Attachment trigger */}
           <input
@@ -554,6 +532,7 @@ export function ConversationView({
               value={inputText}
               onChange={handleTextareaChange}
               onKeyDown={handleKeyDown}
+              onFocus={() => setTimeout(() => scrollToBottom(true), 150)}
               placeholder={`Message ${participant.displayName}...`}
               rows={1}
               className="w-full bg-transparent text-xs sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none resize-none leading-relaxed max-h-28"
