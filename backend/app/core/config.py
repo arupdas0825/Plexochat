@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     FIREBASE_SERVICE_ACCOUNT_PATH: Optional[str] = None
     FIREBASE_PROJECT_ID: Optional[str] = None
 
+    # Google Cloud Translation API (server-side only — never exposed to frontend)
+    GOOGLE_TRANSLATE_API_KEY: Optional[str] = None
+
     # MongoDB Atlas
     MONGODB_URI: str = "mongodb://localhost:27017"
     MONGODB_DATABASE: str = "PlexoChat"

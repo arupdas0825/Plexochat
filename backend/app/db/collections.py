@@ -37,6 +37,16 @@ def get_pending_messages_collection() -> AsyncIOMotorCollection:
     return get_database()["pending_messages"]
 
 
+def get_device_keys_collection() -> AsyncIOMotorCollection:
+    """Returns the `device_keys` collection.
+
+    Stores per-device public key material (Olm identity key + one-time prekeys).
+    PRIVATE KEYS ARE NEVER STORED HERE — only public key material registered
+    by authenticated clients for E2EE session establishment.
+    """
+    return get_database()["device_keys"]
+
+
 def get_collection(name: str) -> AsyncIOMotorCollection:
     """Returns a named collection from the active MongoDB database."""
     return get_database()[name]

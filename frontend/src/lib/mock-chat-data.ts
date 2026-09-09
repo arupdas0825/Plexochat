@@ -26,6 +26,7 @@ export interface ChatMessage {
   status: "sent" | "delivered" | "read";
   isPhoto?: boolean;
   photoUrl?: string;
+  translationUnavailable?: boolean;
 }
 
 export interface ChatThread {

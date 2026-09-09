@@ -6,16 +6,35 @@ Strictly follows:
 - Complete state machine: Search -> Profile -> Request -> Rate Limit -> Accept -> WS Message -> Decline -> Block -> WS Rejection.
 """
 
-import asyncio
-import json
 import os
 import sys
-import requests
-from httpx import AsyncClient, ASGITransport
-import websockets
+
+# Auto-detect and re-execute inside the project's virtual environment if not already in it
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_backend_dir = os.path.abspath(os.path.join(_script_dir, ".."))
+_venv_windows = os.path.join(_backend_dir, ".venv", "Scripts", "python.exe")
+_venv_posix = os.path.join(_backend_dir, ".venv", "bin", "python")
+_venv_python = _venv_windows if os.name == "nt" else _venv_posix
+
+if os.path.isfile(_venv_python) and os.path.abspath(sys.executable).lower() != os.path.abspath(_venv_python).lower():
+    import subprocess
+    result = subprocess.run([_venv_python, os.path.abspath(__file__)] + sys.argv[1:])
+    sys.exit(result.returncode)
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
 
 # Add backend directory to sys.path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+if _backend_dir not in sys.path:
+    sys.path.insert(0, _backend_dir)
+
+import asyncio
+import json
+import requests
+from httpx import AsyncClient, ASGITransport
+
 
 from app.main import app
 from app.db.mongo import connect_to_mongo, close_mongo_connection

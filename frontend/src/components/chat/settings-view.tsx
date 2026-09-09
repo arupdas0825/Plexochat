@@ -24,12 +24,13 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useAuth, SUPPORTED_LANGUAGES } from "@/lib/auth-context";
 
 export function SettingsView() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateProfile } = useAuth();
   const [copiedId, setCopiedId] = useState(false);
   const [selectedLang, setSelectedLang] = useState(
     user?.preferredReceivingLanguage || "en"
   );
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleCopyId = () => {
     if (user?.plexoChatId) {
@@ -39,9 +40,19 @@ export function SettingsView() {
     }
   };
 
-  const handleSaveLanguage = () => {
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2500);
+  const handleSaveLanguage = async () => {
+    setIsSaving(true);
+    try {
+      await updateProfile({
+        preferredReceivingLanguage: selectedLang,
+      });
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 2500);
+    } catch (err) {
+      console.error("Failed to save language preference:", err);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -148,17 +159,25 @@ export function SettingsView() {
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-emerald-500" />
             <h4 className="font-bold text-base text-foreground">
-              End-to-End Encryption & Device Keys
+              End-to-End Encryption &amp; Translation Privacy
             </h4>
           </div>
 
-          <div className="p-4 rounded-2xl bg-secondary/40 border border-border/60 text-xs text-muted-foreground space-y-2">
+          <div className="p-4 rounded-2xl bg-secondary/40 border border-border/60 text-xs text-muted-foreground space-y-3">
             <p className="leading-relaxed">
-              Your cryptographic keys are stored strictly in your browser&apos;s Web Crypto vault. The PlexoChat relay server never has access to your private keys, plaintext chat messages, or unencrypted photos.
+              End-to-End Encryption is powered by the audited <code className="text-primary font-mono text-[11px]">@matrix-org/olm</code> double-ratchet protocol (Signal architecture). Private keys are generated and stored exclusively in your device&apos;s IndexedDB. Identity keys (Curve25519) and one-time prekeys ensure forward secrecy. PlexoChat&apos;s servers only relay opaque ciphertext.
             </p>
+
+            <div className="p-3 rounded-xl bg-card/60 border border-border/70 text-[11px] space-y-1">
+              <span className="font-semibold text-foreground block">Third-Party Translation Disclosure:</span>
+              <p className="leading-relaxed">
+                Messages are translated using a third-party translation service before encryption. Google Translate may process message text for translation purposes. PlexoChat&apos;s own servers never see message content.
+              </p>
+            </div>
+
             <div className="flex items-center gap-2 font-mono text-[11px] text-foreground font-semibold pt-1">
               <Lock className="w-3.5 h-3.5 text-emerald-500" />
-              <span>Current Session: Active on this device</span>
+              <span>Olm Double-Ratchet Active on this device</span>
             </div>
           </div>
         </div>

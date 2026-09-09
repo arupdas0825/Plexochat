@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Settings,
   User,
@@ -17,37 +17,74 @@ import {
   KeyRound,
   Trash2,
   Download,
-  Eye,
-  EyeOff,
   Sun,
   Moon,
   Laptop,
-  CheckCircle2,
   Volume2,
   VolumeX,
   Sparkles,
   Smartphone,
   Shield,
-  HelpCircle,
+  ChevronRight,
+  ChevronLeft,
+  UserX,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth, SUPPORTED_LANGUAGES } from "@/lib/auth-context";
 import { useTheme } from "../theme-provider";
+import { UserAvatar } from "@/components/ui/user-avatar";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export type SettingsTabId =
   | "profile"
   | "languages"
   | "security"
-  | "location"
   | "notifications"
   | "appearance"
+  | "blocked"
   | "account";
+
+// Accessible, responsive iOS-style toggle switch
+function ToggleSwitch({
+  checked,
+  onChange,
+  disabled = false,
+  id,
+}: {
+  checked: boolean;
+  onChange: (val: boolean) => void;
+  disabled?: boolean;
+  id?: string;
+}) {
+  return (
+    <button
+      id={id}
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
+        checked ? "bg-primary" : "bg-muted/80 dark:bg-muted"
+      } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+    >
+      <span
+        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+          checked ? "translate-x-5" : "translate-x-0"
+        }`}
+      />
+    </button>
+  );
+}
 
 export function SettingsPageView() {
   const { user, updateProfile, logout } = useAuth();
   const { theme, setTheme } = useTheme();
 
   const [activeTab, setActiveTab] = useState<SettingsTabId>("profile");
+  // On mobile: null means showing the WhatsApp-style root list; a TabId means showing drill-down page
+  const [mobileSubView, setMobileSubView] = useState<SettingsTabId | null>(null);
 
   // Profile Form States
   const [displayName, setDisplayName] = useState(user?.displayName || "");
@@ -83,7 +120,6 @@ export function SettingsPageView() {
 
   // Appearance States
   const [bubbleStyle, setBubbleStyle] = useState<"glass" | "solid">("glass");
-  const [fontSize, setFontSize] = useState<"default" | "compact" | "large">("default");
   const [reducedMotion, setReducedMotion] = useState(false);
 
   // Feedback States
@@ -91,6 +127,33 @@ export function SettingsPageView() {
   const [copiedFingerprint, setCopiedFingerprint] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [cacheCleared, setCacheCleared] = useState(false);
+
+  // Read URL query or hash if navigating from direct links (e.g. app-shell #security)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab") as SettingsTabId | null;
+      const hashParam = window.location.hash.replace("#", "") as SettingsTabId;
+
+      const validTabs: SettingsTabId[] = [
+        "profile",
+        "languages",
+        "security",
+        "notifications",
+        "appearance",
+        "blocked",
+        "account",
+      ];
+
+      if (tabParam && validTabs.includes(tabParam)) {
+        setActiveTab(tabParam);
+        setMobileSubView(tabParam);
+      } else if (hashParam && validTabs.includes(hashParam)) {
+        setActiveTab(hashParam);
+        setMobileSubView(hashParam);
+      }
+    }
+  }, []);
 
   // Keep state in sync with user if loaded
   useEffect(() => {
@@ -188,207 +251,87 @@ export function SettingsPageView() {
     { label: "Sunset Purple", value: "from-fuchsia-600 to-pink-500" },
   ];
 
-  return (
-    <div className="flex-1 h-full overflow-y-auto p-4 md:p-6 lg:p-8 pb-28 md:pb-8 space-y-6 max-w-5xl mx-auto w-full select-none">
-      
-      {/* 1. Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-border/60">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-primary/20 to-violet-500/20 border border-primary/30 flex items-center justify-center text-primary shadow-xs">
-              <Settings className="w-5 h-5" />
-            </div>
-            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-foreground">
-              Settings & Account Hub
-            </h1>
-          </div>
-          <p className="text-xs md:text-sm text-muted-foreground mt-1">
-            Manage your personal profile, auto-translation, E2EE security keys, and account preferences.
-          </p>
-        </div>
+  // Navigation Items Specification
+  const NAV_ITEMS: {
+    id: SettingsTabId;
+    label: string;
+    description: string;
+    icon: React.ComponentType<{ className?: string }>;
+    colorClass: string;
+    badge?: string;
+  }[] = [
+    {
+      id: "profile",
+      label: "Profile & Identity",
+      description: "Bio, location & language skills",
+      icon: User,
+      colorClass: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
+    },
+    {
+      id: "languages",
+      label: "Language & Translation",
+      description: "Auto-translate & receiving language",
+      icon: Languages,
+      colorClass: "bg-purple-500/15 text-purple-600 dark:text-purple-400",
+      badge: SUPPORTED_LANGUAGES.find((l) => l.code === receivingLang)?.name,
+    },
+    {
+      id: "security",
+      label: "Privacy & Security",
+      description: "E2EE Double Ratchet & visibility",
+      icon: ShieldCheck,
+      colorClass: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+      badge: "E2EE Active",
+    },
+    {
+      id: "notifications",
+      label: "Notifications & Sound",
+      description: "Chimes, alerts & banner previews",
+      icon: Bell,
+      colorClass: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+    },
+    {
+      id: "appearance",
+      label: "Appearance & Theme",
+      description: "Light, dark & bubble styling",
+      icon: Palette,
+      colorClass: "bg-rose-500/15 text-rose-600 dark:text-rose-400",
+    },
+    {
+      id: "blocked",
+      label: "Blocked Contacts",
+      description: "Manage restricted accounts",
+      icon: UserX,
+      colorClass: "bg-red-500/15 text-red-600 dark:text-red-400",
+    },
+    {
+      id: "account",
+      label: "Account & Storage",
+      description: "Export data, cache & session",
+      icon: KeyRound,
+      colorClass: "bg-zinc-500/15 text-zinc-600 dark:text-zinc-400",
+    },
+  ];
 
-        {savedSuccess && (
-          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold animate-in fade-in self-start sm:self-auto shadow-xs">
-            <Check className="w-3.5 h-3.5" />
-            <span>Preferences Saved</span>
-          </span>
-        )}
-      </div>
+  // Active item info
+  const currentTabMeta = NAV_ITEMS.find((item) => item.id === activeTab) || NAV_ITEMS[0];
 
-      {/* 2. Apple-Style Liquid Glass Settings Tab Selector */}
-      <div className="relative flex items-center p-1 rounded-2xl bg-white/70 dark:bg-zinc-900/70 backdrop-blur-xl border border-white/60 dark:border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.7),0_4px_20px_0_rgba(0,0,0,0.06)] dark:shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)] overflow-x-auto no-scrollbar gap-1">
-        
-        {/* Tab 1: Profile */}
-        <button
-          type="button"
-          onClick={() => setActiveTab("profile")}
-          className={`relative px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors duration-200 shrink-0 ${
-            activeTab === "profile"
-              ? "text-primary font-bold"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {activeTab === "profile" && (
-            <motion.div
-              layoutId="settingsActiveTabPill"
-              className="absolute inset-0 rounded-xl bg-primary/10 dark:bg-primary/20 border border-primary/25 shadow-xs"
-              transition={{ type: "spring", stiffness: 400, damping: 32 }}
-            />
-          )}
-          <User className="w-4 h-4 relative z-10" />
-          <span className="relative z-10">Profile</span>
-        </button>
-
-        {/* Tab 2: Language Preferences */}
-        <button
-          type="button"
-          onClick={() => setActiveTab("languages")}
-          className={`relative px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors duration-200 shrink-0 ${
-            activeTab === "languages"
-              ? "text-primary font-bold"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {activeTab === "languages" && (
-            <motion.div
-              layoutId="settingsActiveTabPill"
-              className="absolute inset-0 rounded-xl bg-primary/10 dark:bg-primary/20 border border-primary/25 shadow-xs"
-              transition={{ type: "spring", stiffness: 400, damping: 32 }}
-            />
-          )}
-          <Languages className="w-4 h-4 relative z-10 text-purple-500" />
-          <span className="relative z-10">Languages</span>
-        </button>
-
-        {/* Tab 3: Security & E2EE */}
-        <button
-          type="button"
-          onClick={() => setActiveTab("security")}
-          className={`relative px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors duration-200 shrink-0 ${
-            activeTab === "security"
-              ? "text-primary font-bold"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {activeTab === "security" && (
-            <motion.div
-              layoutId="settingsActiveTabPill"
-              className="absolute inset-0 rounded-xl bg-primary/10 dark:bg-primary/20 border border-primary/25 shadow-xs"
-              transition={{ type: "spring", stiffness: 400, damping: 32 }}
-            />
-          )}
-          <KeyRound className="w-4 h-4 relative z-10 text-emerald-500" />
-          <span className="relative z-10">Security & E2EE</span>
-        </button>
-
-        {/* Tab 4: Location & Discoverability */}
-        <button
-          type="button"
-          onClick={() => setActiveTab("location")}
-          className={`relative px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors duration-200 shrink-0 ${
-            activeTab === "location"
-              ? "text-primary font-bold"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {activeTab === "location" && (
-            <motion.div
-              layoutId="settingsActiveTabPill"
-              className="absolute inset-0 rounded-xl bg-primary/10 dark:bg-primary/20 border border-primary/25 shadow-xs"
-              transition={{ type: "spring", stiffness: 400, damping: 32 }}
-            />
-          )}
-          <MapPin className="w-4 h-4 relative z-10 text-blue-500" />
-          <span className="relative z-10">Location</span>
-        </button>
-
-        {/* Tab 5: Notifications */}
-        <button
-          type="button"
-          onClick={() => setActiveTab("notifications")}
-          className={`relative px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors duration-200 shrink-0 ${
-            activeTab === "notifications"
-              ? "text-primary font-bold"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {activeTab === "notifications" && (
-            <motion.div
-              layoutId="settingsActiveTabPill"
-              className="absolute inset-0 rounded-xl bg-primary/10 dark:bg-primary/20 border border-primary/25 shadow-xs"
-              transition={{ type: "spring", stiffness: 400, damping: 32 }}
-            />
-          )}
-          <Bell className="w-4 h-4 relative z-10 text-amber-500" />
-          <span className="relative z-10">Notifications</span>
-        </button>
-
-        {/* Tab 6: Appearance */}
-        <button
-          type="button"
-          onClick={() => setActiveTab("appearance")}
-          className={`relative px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors duration-200 shrink-0 ${
-            activeTab === "appearance"
-              ? "text-primary font-bold"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {activeTab === "appearance" && (
-            <motion.div
-              layoutId="settingsActiveTabPill"
-              className="absolute inset-0 rounded-xl bg-primary/10 dark:bg-primary/20 border border-primary/25 shadow-xs"
-              transition={{ type: "spring", stiffness: 400, damping: 32 }}
-            />
-          )}
-          <Palette className="w-4 h-4 relative z-10 text-rose-500" />
-          <span className="relative z-10">Appearance</span>
-        </button>
-
-        {/* Tab 7: Account */}
-        <button
-          type="button"
-          onClick={() => setActiveTab("account")}
-          className={`relative px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors duration-200 shrink-0 ${
-            activeTab === "account"
-              ? "text-primary font-bold"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {activeTab === "account" && (
-            <motion.div
-              layoutId="settingsActiveTabPill"
-              className="absolute inset-0 rounded-xl bg-primary/10 dark:bg-primary/20 border border-primary/25 shadow-xs"
-              transition={{ type: "spring", stiffness: 400, damping: 32 }}
-            />
-          )}
-          <ShieldCheck className="w-4 h-4 relative z-10" />
-          <span className="relative z-10">Account</span>
-        </button>
-
-      </div>
-
-      {/* 3. Tab Contents */}
-      <form onSubmit={handleSave} className="space-y-6">
-        
-        {/* ══════════════════════════════════════════════════════
-            SECTION 1: PROFILE
-           ══════════════════════════════════════════════════════ */}
-        {activeTab === "profile" && (
+  // Sub-component for form content
+  const renderCategoryContent = (tabId: SettingsTabId) => {
+    switch (tabId) {
+      case "profile":
+        return (
           <div className="space-y-6">
-            <div className="p-5 sm:p-6 rounded-3xl border border-border/80 bg-card space-y-5 shadow-xs">
-              
-              {/* Profile Avatar & ID Banner */}
+            {/* User Profile Card Preview */}
+            <div className="p-5 sm:p-6 rounded-2xl border border-border/70 bg-card/60 backdrop-blur-xs space-y-5 shadow-xs">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border/50">
                 <div className="flex items-center gap-4">
-                  <div className="relative">
-                    <div
-                      className={`w-16 h-16 rounded-3xl bg-gradient-to-tr ${avatarBg} text-white font-bold text-xl flex items-center justify-center shadow-md`}
-                    >
-                      {displayName ? displayName.substring(0, 2).toUpperCase() : "U"}
-                    </div>
-                    <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 ring-4 ring-card" />
-                  </div>
-
+                  <UserAvatar
+                    name={displayName || user?.displayName || "User"}
+                    avatarBg={avatarBg}
+                    size="xl"
+                    online={true}
+                  />
                   <div>
                     <h2 className="text-base font-bold text-foreground">
                       {displayName || "Your Name"}
@@ -396,7 +339,7 @@ export function SettingsPageView() {
                     <p className="text-xs text-muted-foreground font-mono">
                       @{user?.username || "user"}
                     </p>
-                    <span className="inline-flex items-center gap-1 text-[10px] text-emerald-500 font-mono font-medium mt-1">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                       Verified PlexoChat Profile
                     </span>
@@ -404,12 +347,14 @@ export function SettingsPageView() {
                 </div>
 
                 {/* PlexoChat ID Copy Card */}
-                <div className="p-3 rounded-2xl bg-secondary/40 border border-border/60 space-y-1">
-                  <div className="text-[10px] text-muted-foreground font-mono">PlexoChat Verified ID:</div>
+                <div className="p-3 rounded-xl bg-secondary/50 border border-border/60 space-y-1 self-start sm:self-auto">
+                  <div className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">
+                    PlexoChat Verified ID:
+                  </div>
                   <button
                     type="button"
                     onClick={handleCopyId}
-                    className="px-3 py-1.5 rounded-xl bg-card border border-border/80 text-xs font-mono font-bold flex items-center gap-2 hover:border-primary/40 transition-colors shadow-xs"
+                    className="px-3 py-1.5 rounded-lg bg-card border border-border/80 text-xs font-mono font-bold flex items-center gap-2 hover:border-primary/40 transition-colors shadow-2xs"
                   >
                     <span>{user?.plexoChatId || "PX-8921-X"}</span>
                     {copiedId ? (
@@ -432,8 +377,8 @@ export function SettingsPageView() {
                       onClick={() => setAvatarBg(g.value)}
                       className={`h-8 px-3 rounded-xl text-xs font-medium flex items-center gap-2 border transition-all ${
                         avatarBg === g.value
-                          ? "border-primary ring-2 ring-primary/30 shadow-xs"
-                          : "border-border/70 hover:border-border"
+                          ? "border-primary ring-2 ring-primary/25 bg-primary/5 shadow-2xs font-semibold"
+                          : "border-border/70 hover:border-border bg-card"
                       }`}
                     >
                       <span className={`w-3.5 h-3.5 rounded-full bg-gradient-to-tr ${g.value}`} />
@@ -451,7 +396,7 @@ export function SettingsPageView() {
                     type="text"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    className="w-full h-10 px-3 rounded-xl border border-border/80 bg-secondary/30 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="w-full h-10 px-3.5 rounded-xl border border-border/80 bg-secondary/30 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
                   />
                 </div>
 
@@ -461,7 +406,7 @@ export function SettingsPageView() {
                     type="text"
                     disabled
                     value={`@${user?.username || "user"}`}
-                    className="w-full h-10 px-3 rounded-xl border border-border/60 bg-secondary/10 text-xs text-muted-foreground font-mono opacity-80 cursor-not-allowed"
+                    className="w-full h-10 px-3.5 rounded-xl border border-border/60 bg-secondary/15 text-xs text-muted-foreground font-mono opacity-80 cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -475,7 +420,7 @@ export function SettingsPageView() {
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
                     placeholder="e.g. Tokyo, Berlin, Kolkata"
-                    className="w-full h-10 px-3 rounded-xl border border-border/80 bg-secondary/30 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="w-full h-10 px-3.5 rounded-xl border border-border/80 bg-secondary/30 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
                   />
                 </div>
 
@@ -486,7 +431,7 @@ export function SettingsPageView() {
                     value={country}
                     onChange={(e) => setCountry(e.target.value)}
                     placeholder="e.g. Japan, Germany, India"
-                    className="w-full h-10 px-3 rounded-xl border border-border/80 bg-secondary/30 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="w-full h-10 px-3.5 rounded-xl border border-border/80 bg-secondary/30 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
                   />
                 </div>
               </div>
@@ -495,27 +440,27 @@ export function SettingsPageView() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-foreground">
-                    Languages You Speak (comma-separated)
+                    Languages You Speak
                   </label>
                   <input
                     type="text"
                     value={languagesSpoken}
                     onChange={(e) => setLanguagesSpoken(e.target.value)}
                     placeholder="e.g. English, Japanese"
-                    className="w-full h-10 px-3 rounded-xl border border-border/80 bg-secondary/30 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="w-full h-10 px-3.5 rounded-xl border border-border/80 bg-secondary/30 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
                   />
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-foreground">
-                    Languages You Are Learning (comma-separated)
+                    Languages You Are Learning
                   </label>
                   <input
                     type="text"
                     value={languagesLearning}
                     onChange={(e) => setLanguagesLearning(e.target.value)}
                     placeholder="e.g. Spanish, German, French"
-                    className="w-full h-10 px-3 rounded-xl border border-border/80 bg-secondary/30 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="w-full h-10 px-3.5 rounded-xl border border-border/80 bg-secondary/30 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
                   />
                 </div>
               </div>
@@ -527,57 +472,45 @@ export function SettingsPageView() {
                   rows={3}
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
-                  placeholder="Share a bit about yourself, what culture you love, and your language goals..."
-                  className="w-full p-3 rounded-xl border border-border/80 bg-secondary/30 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                  placeholder="Share a bit about yourself, cultures you love, and language goals..."
+                  className="w-full p-3.5 rounded-xl border border-border/80 bg-secondary/30 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none transition-all"
                 />
               </div>
-
             </div>
           </div>
-        )}
+        );
 
-        {/* ══════════════════════════════════════════════════════
-            SECTION 2: LANGUAGE PREFERENCES & TRANSLATION
-           ══════════════════════════════════════════════════════ */}
-        {activeTab === "languages" && (
+      case "languages":
+        return (
           <div className="space-y-6">
-            <div className="p-5 sm:p-6 rounded-3xl border border-border/80 bg-card space-y-5 shadow-xs">
-              <div className="pb-3 border-b border-border/50">
-                <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-                  <Languages className="w-4 h-4 text-purple-500" />
-                  <span>Real-Time Client Translation</span>
-                </h2>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  PlexoChat translates messages after end-to-end decryption directly inside your device sandbox.
-                </p>
-              </div>
-
+            <div className="p-5 sm:p-6 rounded-2xl border border-border/70 bg-card/60 backdrop-blur-xs space-y-6 shadow-xs">
               {/* Auto Translate Toggle */}
-              <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-border/60">
-                <div className="space-y-0.5">
+              <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/30 border border-border/60">
+                <div className="space-y-0.5 max-w-[80%]">
                   <div className="text-xs font-semibold text-foreground">
                     Automatic Incoming Message Translation
                   </div>
-                  <div className="text-[11px] text-muted-foreground">
+                  <div className="text-[11px] text-muted-foreground leading-relaxed">
                     Instantly translate foreign incoming messages into your preferred language upon arrival.
                   </div>
                 </div>
-                <input
-                  type="checkbox"
+                <ToggleSwitch
                   checked={autoTranslateEnabled}
-                  onChange={(e) => setAutoTranslateEnabled(e.target.checked)}
-                  className="w-5 h-5 rounded accent-primary cursor-pointer"
+                  onChange={setAutoTranslateEnabled}
+                  id="auto-translate-switch"
                 />
               </div>
 
               {/* Language Selection Grid */}
               <div className="space-y-3">
-                <label className="text-xs font-semibold text-foreground flex items-center justify-between">
-                  <span>Preferred Receiving Language</span>
-                  <span className="text-[10px] text-primary font-mono font-semibold">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-foreground">
+                    Preferred Receiving Language
+                  </label>
+                  <span className="text-[11px] text-primary font-mono font-semibold">
                     Current: {SUPPORTED_LANGUAGES.find((l) => l.code === receivingLang)?.name || "English"}
                   </span>
-                </label>
+                </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
                   {SUPPORTED_LANGUAGES.map((lang) => {
@@ -587,13 +520,13 @@ export function SettingsPageView() {
                         key={lang.code}
                         type="button"
                         onClick={() => setReceivingLang(lang.code)}
-                        className={`p-3 rounded-2xl border text-xs font-medium flex items-center gap-2.5 transition-all ${
+                        className={`p-3 rounded-xl border text-xs font-medium flex items-center gap-2.5 transition-all text-left ${
                           isSelected
-                            ? "bg-primary text-primary-foreground border-primary shadow-md shadow-primary/20 font-semibold"
+                            ? "bg-primary text-primary-foreground border-primary shadow-xs font-semibold"
                             : "bg-secondary/40 border-border/70 text-foreground hover:bg-secondary"
                         }`}
                       >
-                        <span className="text-xl">{lang.flag}</span>
+                        <span className="text-xl shrink-0">{lang.flag}</span>
                         <span className="truncate">{lang.name}</span>
                       </button>
                     );
@@ -602,56 +535,43 @@ export function SettingsPageView() {
               </div>
 
               {/* Translation Privacy Notice */}
-              <div className="p-3.5 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-xs text-foreground flex items-start gap-2.5">
-                <Sparkles className="w-4 h-4 text-purple-500 shrink-0 mt-0.5" />
+              <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs text-foreground flex items-start gap-3">
+                <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5" />
                 <div className="text-[11px] text-muted-foreground leading-relaxed">
-                  <strong>Zero Server Plaintext:</strong> Message payloads remain end-to-end encrypted in transit. Translation happens purely in the authenticated client layer after cryptographic signature verification.
+                  <strong className="text-foreground">Zero Server Plaintext:</strong> Message payloads remain end-to-end encrypted in transit. Translation happens purely in the authenticated client layer after cryptographic signature verification.
                 </div>
               </div>
-
             </div>
           </div>
-        )}
+        );
 
-        {/* ══════════════════════════════════════════════════════
-            SECTION 3: SECURITY & E2EE
-           ══════════════════════════════════════════════════════ */}
-        {activeTab === "security" && (
+      case "security":
+        return (
           <div className="space-y-6">
-            <div className="p-5 sm:p-6 rounded-3xl border border-border/80 bg-card space-y-5 shadow-xs">
-              <div className="pb-3 border-b border-border/50">
-                <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-emerald-500" />
-                  <span>End-to-End Encryption & Security Architecture</span>
-                </h2>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Your conversations are shielded by client-side Double Ratchet encryption with ephemeral keys.
-                </p>
-              </div>
-
+            <div className="p-5 sm:p-6 rounded-2xl border border-border/70 bg-card/60 backdrop-blur-xs space-y-6 shadow-xs">
               {/* E2EE Active Banner */}
-              <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between gap-3">
+              <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
                     <ShieldCheck className="w-5 h-5" />
                   </div>
                   <div>
                     <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                      <span>Signal Protocol Double Ratchet Active</span>
+                      <span>Signal Double Ratchet Cryptography Active</span>
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                     </div>
                     <div className="text-[11px] text-muted-foreground mt-0.5">
-                      Forward secrecy & break-in recovery enabled for all 1-to-1 chats.
+                      Forward secrecy & break-in recovery enabled for all direct conversations.
                     </div>
                   </div>
                 </div>
-                <span className="px-2.5 py-1 rounded-full bg-emerald-500 text-white text-[10px] font-bold font-mono">
+                <span className="px-2.5 py-1 rounded-full bg-emerald-500 text-white text-[10px] font-bold font-mono self-start sm:self-auto">
                   VERIFIED
                 </span>
               </div>
 
-              {/* Safety Number & Key Fingerprint */}
-              <div className="space-y-2 p-4 rounded-2xl bg-secondary/30 border border-border/60">
+              {/* Identity Fingerprint */}
+              <div className="space-y-2 p-4 rounded-xl bg-secondary/30 border border-border/60">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                     <KeyRound className="w-3.5 h-3.5 text-primary" />
@@ -675,7 +595,7 @@ export function SettingsPageView() {
                     )}
                   </button>
                 </div>
-                <div className="p-3 rounded-xl bg-card border border-border font-mono text-[11px] text-muted-foreground tracking-wider select-all break-all">
+                <div className="p-3 rounded-lg bg-card border border-border font-mono text-[11px] text-muted-foreground tracking-wider select-all break-all">
                   7F89 A10B 94C2 6D7E 8F10 22B4 90FA 55C1 88D9 1234
                 </div>
                 <p className="text-[10px] text-muted-foreground">
@@ -683,167 +603,141 @@ export function SettingsPageView() {
                 </p>
               </div>
 
+              {/* Visibility & Location Toggles */}
+              <div className="space-y-3 pt-2">
+                <h3 className="text-xs font-bold text-foreground flex items-center gap-1.5 uppercase tracking-wider">
+                  <MapPin className="w-3.5 h-3.5 text-blue-500" />
+                  <span>Discovery & Visibility Controls</span>
+                </h3>
+
+                {/* Discoverable toggle */}
+                <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/30 border border-border/60">
+                  <div className="space-y-0.5 max-w-[80%]">
+                    <div className="text-xs font-semibold text-foreground">
+                      Discoverable on Explore World
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Allow verified language partners to view your profile card and send connection requests.
+                    </div>
+                  </div>
+                  <ToggleSwitch
+                    checked={isDiscoverable}
+                    onChange={setIsDiscoverable}
+                    id="discoverable-switch"
+                  />
+                </div>
+
+                {/* Approximate Location toggle */}
+                <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/30 border border-border/60">
+                  <div className="space-y-0.5 max-w-[80%]">
+                    <div className="text-xs font-semibold text-foreground">
+                      Show Approximate City Cluster Pin
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Display your general city pin (e.g. &quot;{city || "Tokyo"}, {country || "Japan"}&quot;). Exact GPS coordinates are NEVER collected or stored.
+                    </div>
+                  </div>
+                  <ToggleSwitch
+                    checked={showLocation}
+                    onChange={setShowLocation}
+                    id="approximate-location-switch"
+                  />
+                </div>
+
+                {/* Stealth Mode toggle */}
+                <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/30 border border-border/60">
+                  <div className="space-y-0.5 max-w-[80%]">
+                    <div className="text-xs font-semibold text-foreground flex items-center gap-2">
+                      <span>Incognito Online Status</span>
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-secondary text-muted-foreground font-mono">
+                        Stealth
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Hide your green online indicator from non-connected members while browsing Explore.
+                    </div>
+                  </div>
+                  <ToggleSwitch
+                    checked={stealthMode}
+                    onChange={setStealthMode}
+                    id="stealth-mode-switch"
+                  />
+                </div>
+              </div>
+
               {/* Active Sessions */}
-              <div className="space-y-2">
+              <div className="space-y-2 pt-2">
                 <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                   <Smartphone className="w-3.5 h-3.5 text-primary" />
                   <span>Active Authenticated Client Sessions</span>
                 </label>
-                <div className="p-3.5 rounded-2xl bg-secondary/30 border border-border/60 flex items-center justify-between">
+                <div className="p-3.5 rounded-xl bg-secondary/30 border border-border/60 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-card border border-border/70 flex items-center justify-center text-primary">
+                    <div className="w-8 h-8 rounded-lg bg-card border border-border/70 flex items-center justify-center text-primary">
                       <Laptop className="w-4 h-4" />
                     </div>
                     <div>
                       <div className="text-xs font-semibold text-foreground">
-                        Current Browser (Chrome on Windows / Mobile)
+                        Current Browser Client Session
                       </div>
                       <div className="text-[10px] text-muted-foreground font-mono">
                         Protected via TLS 1.3 & Cloudflare Relay • Active now
                       </div>
                     </div>
                   </div>
-                  <span className="text-[10px] font-mono text-emerald-500 font-bold px-2 py-0.5 rounded-md bg-emerald-500/10">
+                  <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold px-2 py-0.5 rounded-md bg-emerald-500/10">
                     THIS DEVICE
                   </span>
                 </div>
               </div>
-
             </div>
           </div>
-        )}
+        );
 
-        {/* ══════════════════════════════════════════════════════
-            SECTION 4: LOCATION & DISCOVERABILITY
-           ══════════════════════════════════════════════════════ */}
-        {activeTab === "location" && (
+      case "notifications":
+        return (
           <div className="space-y-6">
-            <div className="p-5 sm:p-6 rounded-3xl border border-border/80 bg-card space-y-5 shadow-xs">
-              <div className="pb-3 border-b border-border/50">
-                <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-blue-500" />
-                  <span>Privacy & Discovery Controls</span>
-                </h2>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Control how other international members discover you on the global world map.
-                </p>
-              </div>
-
-              {/* Discoverable toggle */}
-              <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-border/60">
-                <div className="space-y-0.5">
-                  <div className="text-xs font-semibold text-foreground">
-                    Discoverable on Explore World
-                  </div>
-                  <div className="text-[11px] text-muted-foreground">
-                    Allow verified language partners to view your profile card and send you connection requests.
-                  </div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={isDiscoverable}
-                  onChange={(e) => setIsDiscoverable(e.target.checked)}
-                  className="w-5 h-5 rounded accent-primary cursor-pointer"
-                />
-              </div>
-
-              {/* Approximate Location toggle */}
-              <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-border/60">
-                <div className="space-y-0.5">
-                  <div className="text-xs font-semibold text-foreground">
-                    Show Approximate City Cluster Pin
-                  </div>
-                  <div className="text-[11px] text-muted-foreground">
-                    Display your general city pin (e.g. &quot;{city || "Tokyo"}, {country || "Japan"}&quot;). Exact GPS coordinates are NEVER collected or stored.
-                  </div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={showLocation}
-                  onChange={(e) => setShowLocation(e.target.checked)}
-                  className="w-5 h-5 rounded accent-primary cursor-pointer"
-                />
-              </div>
-
-              {/* Stealth Mode toggle */}
-              <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-border/60">
-                <div className="space-y-0.5">
-                  <div className="text-xs font-semibold text-foreground flex items-center gap-2">
-                    <span>Incognito Online Status</span>
-                    <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-secondary text-muted-foreground font-mono">
-                      Privacy
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-muted-foreground">
-                    Hide your green online indicator from non-connected members while browsing Explore.
-                  </div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={stealthMode}
-                  onChange={(e) => setStealthMode(e.target.checked)}
-                  className="w-5 h-5 rounded accent-primary cursor-pointer"
-                />
-              </div>
-
-            </div>
-          </div>
-        )}
-
-        {/* ══════════════════════════════════════════════════════
-            SECTION 5: NOTIFICATIONS
-           ══════════════════════════════════════════════════════ */}
-        {activeTab === "notifications" && (
-          <div className="space-y-6">
-            <div className="p-5 sm:p-6 rounded-3xl border border-border/80 bg-card space-y-5 shadow-xs">
-              <div className="pb-3 border-b border-border/50">
-                <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-                  <Bell className="w-4 h-4 text-amber-500" />
-                  <span>Notification & Sound Alerts</span>
-                </h2>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Customize incoming message alerts and sound chimes across devices.
-                </p>
-              </div>
-
+            <div className="p-5 sm:p-6 rounded-2xl border border-border/70 bg-card/60 backdrop-blur-xs space-y-4 shadow-xs">
               {/* Push Notifications */}
-              <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-border/60">
-                <div className="space-y-0.5">
+              <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/30 border border-border/60">
+                <div className="space-y-0.5 max-w-[80%]">
                   <div className="text-xs font-semibold text-foreground">Push Notifications</div>
                   <div className="text-[11px] text-muted-foreground">
                     Receive background notifications when partners message you.
                   </div>
                 </div>
-                <input
-                  type="checkbox"
+                <ToggleSwitch
                   checked={pushEnabled}
-                  onChange={(e) => setPushEnabled(e.target.checked)}
-                  className="w-5 h-5 rounded accent-primary cursor-pointer"
+                  onChange={setPushEnabled}
+                  id="push-notifications-switch"
                 />
               </div>
 
               {/* Audio Chimes */}
-              <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-border/60">
-                <div className="space-y-0.5">
+              <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/30 border border-border/60">
+                <div className="space-y-0.5 max-w-[80%]">
                   <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                    {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-primary" /> : <VolumeX className="w-3.5 h-3.5 text-muted-foreground" />}
+                    {soundEnabled ? (
+                      <Volume2 className="w-3.5 h-3.5 text-primary" />
+                    ) : (
+                      <VolumeX className="w-3.5 h-3.5 text-muted-foreground" />
+                    )}
                     <span>In-App Sound Chimes</span>
                   </div>
                   <div className="text-[11px] text-muted-foreground">
-                    Play a subtle Apple-style chime when new messages arrive.
+                    Play a subtle Apple-style chime when new incoming messages arrive.
                   </div>
                 </div>
-                <input
-                  type="checkbox"
+                <ToggleSwitch
                   checked={soundEnabled}
-                  onChange={(e) => setSoundEnabled(e.target.checked)}
-                  className="w-5 h-5 rounded accent-primary cursor-pointer"
+                  onChange={setSoundEnabled}
+                  id="sound-chimes-switch"
                 />
               </div>
 
               {/* Connection Requests Alerts */}
-              <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-border/60">
-                <div className="space-y-0.5">
+              <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/30 border border-border/60">
+                <div className="space-y-0.5 max-w-[80%]">
                   <div className="text-xs font-semibold text-foreground">
                     Connection Request Invitations
                   </div>
@@ -851,52 +745,37 @@ export function SettingsPageView() {
                     Highlight incoming invitations in the Explore navigation tab badge.
                   </div>
                 </div>
-                <input
-                  type="checkbox"
+                <ToggleSwitch
                   checked={requestAlerts}
-                  onChange={(e) => setRequestAlerts(e.target.checked)}
-                  className="w-5 h-5 rounded accent-primary cursor-pointer"
+                  onChange={setRequestAlerts}
+                  id="request-alerts-switch"
                 />
               </div>
 
               {/* Preview Banners */}
-              <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-border/60">
-                <div className="space-y-0.5">
+              <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/30 border border-border/60">
+                <div className="space-y-0.5 max-w-[80%]">
                   <div className="text-xs font-semibold text-foreground">
                     Show Message Preview in Banners
                   </div>
                   <div className="text-[11px] text-muted-foreground">
-                    Display translated message snippet in banner alerts.
+                    Display translated message snippet in in-app notification toasts.
                   </div>
                 </div>
-                <input
-                  type="checkbox"
+                <ToggleSwitch
                   checked={previewEnabled}
-                  onChange={(e) => setPreviewEnabled(e.target.checked)}
-                  className="w-5 h-5 rounded accent-primary cursor-pointer"
+                  onChange={setPreviewEnabled}
+                  id="preview-banners-switch"
                 />
               </div>
-
             </div>
           </div>
-        )}
+        );
 
-        {/* ══════════════════════════════════════════════════════
-            SECTION 6: APPEARANCE
-           ══════════════════════════════════════════════════════ */}
-        {activeTab === "appearance" && (
+      case "appearance":
+        return (
           <div className="space-y-6">
-            <div className="p-5 sm:p-6 rounded-3xl border border-border/80 bg-card space-y-5 shadow-xs">
-              <div className="pb-3 border-b border-border/50">
-                <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-                  <Palette className="w-4 h-4 text-rose-500" />
-                  <span>Appearance & Themes</span>
-                </h2>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Select your interface theme and chat styling options.
-                </p>
-              </div>
-
+            <div className="p-5 sm:p-6 rounded-2xl border border-border/70 bg-card/60 backdrop-blur-xs space-y-6 shadow-xs">
               {/* Theme Mode Selector */}
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-foreground">Color Mode</label>
@@ -905,9 +784,9 @@ export function SettingsPageView() {
                   <button
                     type="button"
                     onClick={() => setTheme("light")}
-                    className={`p-4 rounded-2xl border text-center flex flex-col items-center gap-2 transition-all ${
+                    className={`p-4 rounded-xl border text-center flex flex-col items-center gap-2 transition-all ${
                       theme === "light"
-                        ? "border-primary bg-primary/10 ring-2 ring-primary/25 shadow-xs font-bold text-primary"
+                        ? "border-primary bg-primary/10 ring-2 ring-primary/25 shadow-2xs font-bold text-primary"
                         : "border-border/80 bg-secondary/30 text-muted-foreground hover:text-foreground"
                     }`}
                   >
@@ -919,9 +798,9 @@ export function SettingsPageView() {
                   <button
                     type="button"
                     onClick={() => setTheme("dark")}
-                    className={`p-4 rounded-2xl border text-center flex flex-col items-center gap-2 transition-all ${
+                    className={`p-4 rounded-xl border text-center flex flex-col items-center gap-2 transition-all ${
                       theme === "dark"
-                        ? "border-primary bg-primary/10 ring-2 ring-primary/25 shadow-xs font-bold text-primary"
+                        ? "border-primary bg-primary/10 ring-2 ring-primary/25 shadow-2xs font-bold text-primary"
                         : "border-border/80 bg-secondary/30 text-muted-foreground hover:text-foreground"
                     }`}
                   >
@@ -933,9 +812,9 @@ export function SettingsPageView() {
                   <button
                     type="button"
                     onClick={() => setTheme("system")}
-                    className={`p-4 rounded-2xl border text-center flex flex-col items-center gap-2 transition-all ${
+                    className={`p-4 rounded-xl border text-center flex flex-col items-center gap-2 transition-all ${
                       theme === "system"
-                        ? "border-primary bg-primary/10 ring-2 ring-primary/25 shadow-xs font-bold text-primary"
+                        ? "border-primary bg-primary/10 ring-2 ring-primary/25 shadow-2xs font-bold text-primary"
                         : "border-border/80 bg-secondary/30 text-muted-foreground hover:text-foreground"
                     }`}
                   >
@@ -952,79 +831,91 @@ export function SettingsPageView() {
                   <button
                     type="button"
                     onClick={() => setBubbleStyle("glass")}
-                    className={`p-4 rounded-2xl border text-left transition-all ${
+                    className={`p-4 rounded-xl border text-left transition-all ${
                       bubbleStyle === "glass"
-                        ? "border-primary bg-primary/10 ring-2 ring-primary/25 shadow-xs"
+                        ? "border-primary bg-primary/10 ring-2 ring-primary/25 shadow-2xs"
                         : "border-border/80 bg-secondary/30 text-muted-foreground hover:text-foreground"
                     }`}
                   >
                     <div className="text-xs font-bold text-foreground">Liquid Glass (Translucent)</div>
                     <div className="text-[11px] text-muted-foreground mt-0.5">
-                      Frosted glass with backdrop blur and specular highlights.
+                      Subtle frosted backdrop blur with modern specular border highlight.
                     </div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setBubbleStyle("solid")}
-                    className={`p-4 rounded-2xl border text-left transition-all ${
+                    className={`p-4 rounded-xl border text-left transition-all ${
                       bubbleStyle === "solid"
-                        ? "border-primary bg-primary/10 ring-2 ring-primary/25 shadow-xs"
+                        ? "border-primary bg-primary/10 ring-2 ring-primary/25 shadow-2xs"
                         : "border-border/80 bg-secondary/30 text-muted-foreground hover:text-foreground"
                     }`}
                   >
                     <div className="text-xs font-bold text-foreground">Solid Color</div>
                     <div className="text-[11px] text-muted-foreground mt-0.5">
-                      Clean opaque bubble styling with high contrast.
+                      Crisp, high-contrast opaque bubbles for high readability.
                     </div>
                   </button>
                 </div>
               </div>
 
               {/* Reduced Motion */}
-              <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-border/60">
-                <div className="space-y-0.5">
+              <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/30 border border-border/60">
+                <div className="space-y-0.5 max-w-[80%]">
                   <div className="text-xs font-semibold text-foreground">Reduced Motion</div>
                   <div className="text-[11px] text-muted-foreground">
                     Minimize UI transitions and animations for smoother performance.
                   </div>
                 </div>
-                <input
-                  type="checkbox"
+                <ToggleSwitch
                   checked={reducedMotion}
-                  onChange={(e) => setReducedMotion(e.target.checked)}
-                  className="w-5 h-5 rounded accent-primary cursor-pointer"
+                  onChange={setReducedMotion}
+                  id="reduced-motion-switch"
                 />
               </div>
-
             </div>
           </div>
-        )}
+        );
 
-        {/* ══════════════════════════════════════════════════════
-            SECTION 7: ACCOUNT & DATA
-           ══════════════════════════════════════════════════════ */}
-        {activeTab === "account" && (
+      case "blocked":
+        return (
           <div className="space-y-6">
-            <div className="p-5 sm:p-6 rounded-3xl border border-border/80 bg-card space-y-5 shadow-xs">
-              <div className="pb-3 border-b border-border/50">
-                <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-primary" />
-                  <span>Account & Data Management</span>
-                </h2>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Export your conversation data, clear local cache, or manage session authentication.
-                </p>
+            <div className="p-5 sm:p-6 rounded-2xl border border-border/70 bg-card/60 backdrop-blur-xs space-y-5 shadow-xs">
+              <div className="flex items-center justify-between pb-3 border-b border-border/50">
+                <div>
+                  <h3 className="text-xs font-bold text-foreground">Restricted Contacts</h3>
+                  <p className="text-[11px] text-muted-foreground">
+                    Blocked members cannot send you messages or view your presence status.
+                  </p>
+                </div>
+                <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-secondary text-muted-foreground">
+                  0 Contacts
+                </span>
               </div>
 
+              <EmptyState
+                icon={UserX}
+                title="No Blocked Contacts"
+                description="Your block list is currently clean. You can block any contact directly from their profile card or chat action menu if you ever feel uncomfortable."
+                className="py-10"
+              />
+            </div>
+          </div>
+        );
+
+      case "account":
+        return (
+          <div className="space-y-6">
+            <div className="p-5 sm:p-6 rounded-2xl border border-border/70 bg-card/60 backdrop-blur-xs space-y-6 shadow-xs">
               {/* Account Info Details */}
-              <div className="space-y-2 p-4 rounded-2xl bg-secondary/30 border border-border/60">
-                <div className="text-xs font-semibold text-foreground">Authenticated Account</div>
+              <div className="space-y-2 p-4 rounded-xl bg-secondary/30 border border-border/60">
+                <div className="text-xs font-semibold text-foreground">Authenticated Session</div>
                 <div className="text-xs text-muted-foreground">
-                  Email: <strong className="text-foreground">{user?.email || "Signed in with PlexoChat"}</strong>
+                  Email: <strong className="text-foreground">{user?.email || "Signed in via Firebase Auth"}</strong>
                 </div>
                 <div className="text-xs text-muted-foreground font-mono">
-                  User ID: <strong className="text-foreground">{user?.id || "PX-USER"}</strong>
+                  Account ID: <strong className="text-foreground">{user?.id || "PX-USER"}</strong>
                 </div>
               </div>
 
@@ -1033,9 +924,9 @@ export function SettingsPageView() {
                 <button
                   type="button"
                   onClick={handleExportData}
-                  className="p-4 rounded-2xl border border-border/80 bg-card hover:border-primary/40 text-left transition-all shadow-xs flex items-center gap-3"
+                  className="p-4 rounded-xl border border-border/80 bg-card hover:border-primary/40 text-left transition-all shadow-2xs flex items-center gap-3"
                 >
-                  <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
                     <Download className="w-4 h-4" />
                   </div>
                   <div>
@@ -1047,9 +938,9 @@ export function SettingsPageView() {
                 <button
                   type="button"
                   onClick={handleClearCache}
-                  className="p-4 rounded-2xl border border-border/80 bg-card hover:border-amber-500/40 text-left transition-all shadow-xs flex items-center gap-3"
+                  className="p-4 rounded-xl border border-border/80 bg-card hover:border-amber-500/40 text-left transition-all shadow-2xs flex items-center gap-3"
                 >
-                  <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
+                  <div className="w-9 h-9 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
                     <Trash2 className="w-4 h-4" />
                   </div>
                   <div>
@@ -1061,12 +952,12 @@ export function SettingsPageView() {
                 </button>
               </div>
 
-              {/* Danger Zone / Logout */}
+              {/* Sign Out Action Card */}
               <div className="pt-4 border-t border-border/50 flex flex-col sm:flex-row items-center justify-between gap-3">
                 <div>
-                  <div className="text-xs font-bold text-foreground">Session Authentication</div>
+                  <div className="text-xs font-bold text-foreground">Session Security</div>
                   <div className="text-[11px] text-muted-foreground">
-                    End your active session on this device.
+                    End your active session on this device securely.
                   </div>
                 </div>
 
@@ -1080,33 +971,448 @@ export function SettingsPageView() {
                   <span>Sign Out of PlexoChat</span>
                 </Button>
               </div>
-
             </div>
           </div>
-        )}
+        );
 
-        {/* Global Save Button */}
-        <div className="flex items-center justify-between pt-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={logout}
-            className="text-xs text-destructive hover:bg-destructive/10 hover:text-destructive rounded-xl gap-2"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>Sign Out</span>
-          </Button>
+      default:
+        return null;
+    }
+  };
 
-          <Button
-            type="submit"
-            className="text-xs font-semibold rounded-xl gap-2 shadow-md shadow-primary/25 px-6 h-10"
-          >
-            <Save className="w-4 h-4" />
-            <span>Save Preferences</span>
-          </Button>
+  return (
+    <div className="flex-1 h-full overflow-y-auto p-4 md:p-6 lg:p-8 pb-28 md:pb-8 max-w-6xl mx-auto w-full select-none">
+      
+      {/* ══════════════════════════════════════════════════════
+          MOBILE VIEW (md:hidden) — WhatsApp-Style Icon/Label List
+         ══════════════════════════════════════════════════════ */}
+      <div className="md:hidden">
+        <AnimatePresence mode="wait">
+          {mobileSubView === null ? (
+            /* Root Mobile Settings Hub */
+            <motion.div
+              key="mobile-root"
+              initial={{ opacity: 0, x: -16 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -16 }}
+              transition={{ duration: 0.18 }}
+              className="space-y-5"
+            >
+              {/* Header */}
+              <div className="pb-1">
+                <h1 className="text-2xl font-bold tracking-tight text-foreground">Settings</h1>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Account, translation, security and interface
+                </p>
+              </div>
+
+              {/* WhatsApp-Style Hero Profile Card */}
+              <div
+                onClick={() => setMobileSubView("profile")}
+                className="p-4 rounded-2xl border border-border/70 bg-card shadow-xs flex items-center justify-between gap-3 active:scale-[0.99] transition-transform cursor-pointer"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <UserAvatar
+                    name={displayName || user?.displayName || "User"}
+                    avatarBg={avatarBg}
+                    size="lg"
+                    online={true}
+                  />
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-bold text-foreground truncate">
+                      {displayName || "Your Name"}
+                    </h2>
+                    <p className="text-xs text-muted-foreground font-mono truncate">
+                      @{user?.username || "user"}
+                    </p>
+                    <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5">
+                      <span>ID: {user?.plexoChatId || "PX-8921-X"}</span>
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 text-muted-foreground shrink-0">
+                  <span className="text-[11px] font-medium text-primary">Edit</span>
+                  <ChevronRight className="w-4 h-4" />
+                </div>
+              </div>
+
+              {/* Grouped Settings List (iOS / WhatsApp style) */}
+              <div className="space-y-4">
+                
+                {/* Group 1: General Preferences */}
+                <div className="space-y-1">
+                  <div className="text-[11px] font-semibold text-muted-foreground uppercase px-2 tracking-wider">
+                    Preferences
+                  </div>
+                  <div className="rounded-2xl border border-border/70 bg-card divide-y divide-border/50 overflow-hidden shadow-2xs">
+                    {/* Language & Translation */}
+                    <button
+                      type="button"
+                      onClick={() => setMobileSubView("languages")}
+                      className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-secondary/40 active:bg-secondary/60 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                          <Languages className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-semibold text-foreground">Language & Translation</div>
+                          <div className="text-[11px] text-muted-foreground">
+                            {SUPPORTED_LANGUAGES.find((l) => l.code === receivingLang)?.name || "English"} • Auto-translate
+                          </div>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                    </button>
+
+                    {/* Appearance */}
+                    <button
+                      type="button"
+                      onClick={() => setMobileSubView("appearance")}
+                      className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-secondary/40 active:bg-secondary/60 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                          <Palette className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-semibold text-foreground">Appearance</div>
+                          <div className="text-[11px] text-muted-foreground capitalize">
+                            {theme} mode • {bubbleStyle} bubbles
+                          </div>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                    </button>
+
+                    {/* Notifications */}
+                    <button
+                      type="button"
+                      onClick={() => setMobileSubView("notifications")}
+                      className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-secondary/40 active:bg-secondary/60 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                          <Bell className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-semibold text-foreground">Notifications & Sound</div>
+                          <div className="text-[11px] text-muted-foreground">
+                            {soundEnabled ? "Chimes on" : "Muted"} • Push enabled
+                          </div>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Group 2: Privacy & Security */}
+                <div className="space-y-1">
+                  <div className="text-[11px] font-semibold text-muted-foreground uppercase px-2 tracking-wider">
+                    Privacy & Security
+                  </div>
+                  <div className="rounded-2xl border border-border/70 bg-card divide-y divide-border/50 overflow-hidden shadow-2xs">
+                    {/* Security & E2EE */}
+                    <button
+                      type="button"
+                      onClick={() => setMobileSubView("security")}
+                      className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-secondary/40 active:bg-secondary/60 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                          <ShieldCheck className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                            <span>Privacy & Security</span>
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">
+                            Signal Double Ratchet, Keys & Location
+                          </div>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                    </button>
+
+                    {/* Blocked Contacts */}
+                    <button
+                      type="button"
+                      onClick={() => setMobileSubView("blocked")}
+                      className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-secondary/40 active:bg-secondary/60 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-red-500/15 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
+                          <UserX className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-semibold text-foreground">Blocked Contacts</div>
+                          <div className="text-[11px] text-muted-foreground">0 contacts</div>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Group 3: Account & Session */}
+                <div className="space-y-1">
+                  <div className="text-[11px] font-semibold text-muted-foreground uppercase px-2 tracking-wider">
+                    Account & Data
+                  </div>
+                  <div className="rounded-2xl border border-border/70 bg-card divide-y divide-border/50 overflow-hidden shadow-2xs">
+                    {/* Account & Storage */}
+                    <button
+                      type="button"
+                      onClick={() => setMobileSubView("account")}
+                      className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-secondary/40 active:bg-secondary/60 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-zinc-500/15 text-zinc-600 dark:text-zinc-400 flex items-center justify-center shrink-0">
+                          <KeyRound className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-semibold text-foreground">Account & Storage</div>
+                          <div className="text-[11px] text-muted-foreground">
+                            Export data, cache & session info
+                          </div>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sign Out Button */}
+                <div className="pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={logout}
+                    className="w-full h-11 text-xs font-medium text-destructive hover:bg-destructive/10 hover:text-destructive rounded-2xl gap-2 border-destructive/30"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>Sign Out of PlexoChat</span>
+                  </Button>
+                </div>
+
+              </div>
+            </motion.div>
+          ) : (
+            /* Mobile Drill-Down Subpage */
+            <motion.div
+              key={`mobile-sub-${mobileSubView}`}
+              initial={{ opacity: 0, x: 16 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 16 }}
+              transition={{ duration: 0.18 }}
+              className="space-y-5"
+            >
+              {/* Top Navigation Bar */}
+              <div className="flex items-center justify-between pb-3 border-b border-border/50">
+                <button
+                  type="button"
+                  onClick={() => setMobileSubView(null)}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary py-1 px-1.5 -ml-1.5 rounded-lg hover:bg-secondary/60 active:bg-secondary transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span>Settings</span>
+                </button>
+
+                <h2 className="text-xs font-bold text-foreground">
+                  {NAV_ITEMS.find((item) => item.id === mobileSubView)?.label}
+                </h2>
+
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  className="text-xs font-bold text-primary hover:underline px-2 py-1 rounded-lg"
+                >
+                  {savedSuccess ? "Saved!" : "Save"}
+                </button>
+              </div>
+
+              {savedSuccess && (
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Preferences saved successfully!</span>
+                </div>
+              )}
+
+              {/* Subview Form Content */}
+              {renderCategoryContent(mobileSubView)}
+
+              {/* Bottom Quick Save */}
+              <div className="pt-2">
+                <Button
+                  type="button"
+                  onClick={handleSave}
+                  className="w-full h-11 text-xs font-semibold rounded-2xl gap-2 shadow-md shadow-primary/20"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{savedSuccess ? "Saved Successfully" : "Save Changes"}</span>
+                </Button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* ══════════════════════════════════════════════════════
+          DESKTOP VIEW (hidden md:grid) — Discord / macOS Categorized Two-Column Layout
+         ══════════════════════════════════════════════════════ */}
+      <div className="hidden md:grid md:grid-cols-[260px_1fr] lg:grid-cols-[280px_1fr] gap-8 items-start">
+        
+        {/* Left Column: Sidebar Category Navigation */}
+        <div className="sticky top-6 space-y-4">
+          
+          {/* Mini Profile Summary Card */}
+          <div className="p-3.5 rounded-2xl border border-border/70 bg-card/60 backdrop-blur-xs shadow-xs space-y-3">
+            <div className="flex items-center gap-3">
+              <UserAvatar
+                name={displayName || user?.displayName || "User"}
+                avatarBg={avatarBg}
+                size="md"
+                online={true}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-bold text-foreground truncate">
+                  {displayName || "Your Name"}
+                </div>
+                <div className="text-[11px] text-muted-foreground font-mono truncate">
+                  @{user?.username || "user"}
+                </div>
+              </div>
+            </div>
+
+            {/* Quick ID Copy */}
+            <div className="pt-2 border-t border-border/50 flex items-center justify-between text-[10px]">
+              <span className="font-mono text-muted-foreground">ID: {user?.plexoChatId || "PX-8921-X"}</span>
+              <button
+                type="button"
+                onClick={handleCopyId}
+                className="text-primary hover:underline font-semibold flex items-center gap-1"
+              >
+                {copiedId ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                <span>{copiedId ? "Copied" : "Copy"}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Navigation Items List */}
+          <nav className="p-1.5 rounded-2xl border border-border/70 bg-card/40 backdrop-blur-xs space-y-0.5 shadow-xs">
+            {NAV_ITEMS.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setActiveTab(item.id)}
+                  className={`w-full px-3 py-2.5 rounded-xl text-left flex items-center justify-between transition-all text-xs ${
+                    isActive
+                      ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                      : "text-foreground hover:bg-secondary/70 font-medium"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div
+                      className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
+                        isActive ? "bg-white/20 text-white" : item.colorClass
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="truncate">{item.label}</span>
+                  </div>
+
+                  {item.badge && (
+                    <span
+                      className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono shrink-0 ml-1.5 ${
+                        isActive
+                          ? "bg-white/20 text-white"
+                          : "bg-secondary text-muted-foreground"
+                      }`}
+                    >
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* System Relay Status Footnote */}
+          <div className="px-3 py-2 text-[10px] text-muted-foreground font-mono space-y-1">
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <span>E2EE Relay Active</span>
+            </div>
+            <div>PlexoChat Client v1.2 • Double Ratchet</div>
+          </div>
+
         </div>
 
-      </form>
+        {/* Right Column: Active Category Content */}
+        <div className="space-y-6">
+          
+          {/* Header */}
+          <div className="flex items-center justify-between pb-3 border-b border-border/60">
+            <div>
+              <div className="flex items-center gap-2">
+                <div
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center ${currentTabMeta.colorClass}`}
+                >
+                  <currentTabMeta.icon className="w-4 h-4" />
+                </div>
+                <h1 className="text-xl font-bold tracking-tight text-foreground">
+                  {currentTabMeta.label}
+                </h1>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {currentTabMeta.description}
+              </p>
+            </div>
+
+            {savedSuccess && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold animate-in fade-in shadow-2xs">
+                <Check className="w-3.5 h-3.5" />
+                <span>Preferences Saved</span>
+              </span>
+            )}
+          </div>
+
+          {/* Form Content */}
+          <form onSubmit={handleSave} className="space-y-6">
+            {renderCategoryContent(activeTab)}
+
+            {/* Bottom Action Footer */}
+            <div className="flex items-center justify-between pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={logout}
+                className="text-xs text-destructive hover:bg-destructive/10 hover:text-destructive rounded-xl gap-2 h-10 px-4 border-border/80"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Sign Out</span>
+              </Button>
+
+              <Button
+                type="submit"
+                className="text-xs font-semibold rounded-xl gap-2 shadow-md shadow-primary/25 px-6 h-10"
+              >
+                <Save className="w-4 h-4" />
+                <span>Save Preferences</span>
+              </Button>
+            </div>
+          </form>
+
+        </div>
+
+      </div>
 
     </div>
   );

@@ -4,6 +4,23 @@ from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+# Validated language codes — must match frontend SUPPORTED_LANGUAGES list.
+# Any value outside this set is rejected by the API.
+SUPPORTED_LANGUAGE_CODES = {"en", "bn", "de", "es", "fr", "ja", "ar"}
+
+
+def _validate_language_code(v: Optional[str]) -> Optional[str]:
+    """Shared validator for preferred_receiving_language fields."""
+    if v is None:
+        return v
+    v = v.strip().lower()
+    if v not in SUPPORTED_LANGUAGE_CODES:
+        raise ValueError(
+            f"Unsupported language code '{v}'. "
+            f"Must be one of: {', '.join(sorted(SUPPORTED_LANGUAGE_CODES))}"
+        )
+    return v
+
 
 class UserBase(BaseModel):
     username: str = Field(..., min_length=3, max_length=30, pattern=r"^[a-z0-9_]{3,30}$")
@@ -21,6 +38,12 @@ class UserBase(BaseModel):
     def clean_display_name(cls, v: str) -> str:
         return v.strip()
 
+    @field_validator("preferred_receiving_language")
+    @classmethod
+    def validate_language(cls, v: str) -> str:
+        result = _validate_language_code(v)
+        return result if result is not None else "en"
+
 
 class UserBootstrap(BaseModel):
     """Payload sent by client immediately after first Firebase sign-up/login."""
@@ -34,6 +57,12 @@ class UserBootstrap(BaseModel):
     def normalize_username(cls, v: str) -> str:
         return v.strip().lower()
 
+    @field_validator("preferred_receiving_language")
+    @classmethod
+    def validate_language(cls, v: str) -> str:
+        result = _validate_language_code(v)
+        return result if result is not None else "en"
+
 
 class UserUpdate(BaseModel):
     """Payload for updating user profile fields."""
@@ -44,6 +73,11 @@ class UserUpdate(BaseModel):
     @classmethod
     def clean_display_name(cls, v: Optional[str]) -> Optional[str]:
         return v.strip() if v else None
+
+    @field_validator("preferred_receiving_language")
+    @classmethod
+    def validate_language(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_language_code(v)
 
 
 class UserPublic(BaseModel):

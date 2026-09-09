@@ -26,7 +26,8 @@ Purpose of this document: a compact, durable reference of decisions, constraints
 10. Messaging requires an explicit connection request **and** acceptance — no unsolicited messaging, ever.
 11. E2EE applies to both text and photos.
 12. Client-side/local translation is the preferred architecture specifically because it preserves the E2EE privacy claim — if this is ever revisited in favor of a cloud translation API, the E2EE/privacy claims must be re-qualified everywhere (marketing, `architecture.md`, `security.md`, UI copy).
-13. The server is designed as an encrypted relay + coordination layer — it should never need plaintext messages, plaintext photos, or private keys.
+13. The server is designed as a **temporary** encrypted relay + coordination layer — it should never need plaintext messages, plaintext photos, or private keys.
+13a. **Store-and-forward messaging (WhatsApp/Signal-style) — locked.** The backend is NOT a permanent chat-history database. Messages/photos are queued as ciphertext only until delivered-and-acknowledged or until a configurable retention TTL expires, then deleted server-side. Real conversation history lives in **encrypted local device storage** (IndexedDB), not in MongoDB. If a future request proposes "just store messages in Mongo for simplicity," that contradicts this locked decision — flag it explicitly rather than silently implementing it.
 14. No custom cryptography, under any circumstances — established libraries/protocols only.
 15. Never make absolute security claims ("100% secure," "unbreakable," "impossible to hack") in any user-facing or marketing surface.
 
@@ -76,7 +77,8 @@ Authentication         Firebase Authentication
 Database               MongoDB Atlas
 Real-time / Presence   WebSocket + Redis
 Photo Storage          Cloudflare R2
-End-to-End Encryption  Browser-side Web Crypto + established protocol/library
+End-to-End Encryption  @matrix-org/olm (Signal Double-Ratchet protocol by Matrix.org)
+Translation Provider   Client-side Google Translate (Option B) before encryption, with MyMemory fallback
 ```
 
 Key implications of this specific stack (record these so they aren't re-derived/re-argued later):
@@ -85,9 +87,38 @@ Key implications of this specific stack (record these so they aren't re-derived/
 - **Redis** is unchanged in role: real-time presence + rate-limit counters + in-flight delivery/session state.
 - **Cloudflare R2 replaces the earlier generic "isolated object storage"** placeholder for encrypted photo blobs. Access pattern is FastAPI-issued short-lived presigned URLs, browser-to-R2 direct upload/download — R2 bucket stays private.
 - **Firebase client config vs. Admin SDK key:** the Firebase client-side config (API key, project ID) is expected to be public by Firebase's own design — don't mistake this for a leak. The Admin SDK **service account key** is the actual secret and must never reach the frontend or repo.
-- Client crypto/storage: Web Crypto API, IndexedDB, an established E2EE library/protocol (specific choice still to be finalized — **not yet locked**, see below).
+- **E2EE Library Selection (LOCKED):** `@matrix-org/olm` (v3.2.15). Signal Double-Ratchet implementation with Curve25519 identity keys, Ed25519 signing keys, and ephemeral one-time prekeys. Private keys remain exclusively in client IndexedDB. Device public keys are published via `POST /api/v1/devices/keys`.
+- **Translation Architecture Decision (LOCKED - Option B):** Client-side translation runs directly in the browser *before* Olm encryption. Plaintext is never seen by PlexoChat's servers. Third-party translation disclosure is explicitly declared in Settings UI: *"Messages are translated using a third-party translation service before encryption. Google Translate may process message text for translation purposes. PlexoChat's own servers never see message content."*
 
-**Open item (unchanged):** the exact E2EE protocol/library has intentionally not been locked yet. When it is chosen during Phase 5 implementation, record the choice and rationale here.
+---
+
+## 6a. Production Status Snapshot (as of this update)
+
+**PlexoChat is now LIVE in production**, not just planned. Record deviations/additions from the original plan here so future prompts build on reality, not the original draft.
+
+**Live deployment:**
+- Frontend: Vercel Edge Network — `https://plexochat.vercel.app`
+- Backend: Render Cloud Web Service — `https://plexochat-backend.onrender.com` (Root Directory: `backend`, start command `uvicorn app.main:app --host 0.0.0.0 --port $PORT`)
+- Note: Render/Vercel were not part of the original architecture draft (which was silent on hosting) — this is the confirmed hosting decision going forward. Cloudflare R2, Firebase Auth, and MongoDB Atlas remain as planned.
+
+**Connection state machine — actual implemented version differs slightly from the original draft:**
+- Implemented: `NONE → REQUEST_SENT / REQUEST_RECEIVED → ACCEPTED` plus a bidirectional `BLOCKED` state.
+- This is a simpler 5-state model than the originally drafted `NONE → REQUEST_SENT → PENDING → ACCEPTED → E2EE_SESSION_ESTABLISHED → ACTIVE_CHAT` chain — `PENDING` was effectively merged into `REQUEST_RECEIVED` (the receiver's-side view of a sent request), and `E2EE_SESSION_ESTABLISHED`/`ACTIVE_CHAT` haven't been implemented as separate tracked states yet (E2EE itself is still an open Phase 5 item). Treat the 5-state model as current reality; revisit whether the finer-grained states are still needed once E2EE lands.
+- `DECLINED` is not currently a persisted terminal state in the summary above — confirm/record actual behavior here once verified (does declining just return to `NONE`, allowing a new request?).
+
+**Store-and-forward messaging — confirmed implemented as designed:**
+- `pending_messages` collection with a 48-hour MongoDB TTL index is live, matching the locked store-and-forward decision (§13a above). Good — no drift here.
+
+**Rate limiting — implementation detail differs from the original plan:**
+- Implemented as an **in-memory sliding window** rate limiter (`backend/app/services/rate_limiter.py`), not the originally-planned Redis-backed limiter. This works for a single backend instance but will need to move to Redis (already present as an optional client — `backend/app/db/redis_client.py`) if/when the backend scales to multiple instances, since in-memory limits don't share state across instances. Flag this before any horizontal scaling work.
+
+**Auth — one addition beyond the original plan:**
+- Dual-mode Firebase token verification was added: Firebase Admin SDK when a service account is configured, falling back to direct cryptographic verification against Google's public OAuth2 certificates (`google.oauth2.id_token.verify_firebase_token`) when it isn't. This lets the backend run securely on Render without a static credential file. Also added: auto-provisioning — a verified Firebase user with no MongoDB document yet is created on the fly instead of getting a premature 401. Both are reasonable production hardening, not scope creep — recorded here for traceability.
+
+**Known resolved production issues (for context, don't re-fix):**
+- CORS: `https://plexochat.vercel.app` (and any `*.vercel.app` preview) must remain in the allowed-origins regex on the backend — this broke search in production once already (Root Cause B in the project evolution doc) because `ENVIRONMENT` defaulted to `"development"`.
+- User search must strip a leading `@` from queries and match both the `@`-prefixed and bare forms (Root Cause C) — don't regress this in any future search-related change.
+- Frontend must never fall back to a private/LAN IP for the backend URL when running on a public domain (Chrome Private Network Access warning, Milestone 7) — `isPrivateOrLocalHost()` in `auth-context.tsx` is the guard; keep it intact.
 
 ---
 
@@ -106,7 +137,7 @@ Key implications of this specific stack (record these so they aren't re-derived/
 
 ## 8. Open Questions / Not Yet Decided
 
-- Exact E2EE protocol/library selection (Phase 5).
+- [Resolved 2026-09] Exact E2EE protocol/library selection: `@matrix-org/olm` (Double-Ratchet).
 - Whether/when passwordless auth (e.g., passkeys) is considered vs. traditional password + hashing.
 - Object storage provider/approach for encrypted photo blobs.
 - Specific rate-limit thresholds (deliberately left configurable, not hardcoded — see `security.md`).

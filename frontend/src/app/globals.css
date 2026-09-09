@@ -3,50 +3,111 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
+  /* Surface & Base Colors (Light Mode) */
   --background: #fbfbfd;
   --foreground: #090a0f;
   --card: #ffffff;
   --card-foreground: #090a0f;
   --popover: #ffffff;
   --popover-foreground: #090a0f;
+
+  /* Primary Brand Violet / Indigo */
   --primary: #4f46e5;
   --primary-foreground: #ffffff;
   --primary-hover: #4338ca;
+
+  /* Secondary, Muted & Accent Surfaces */
   --secondary: #f3f4f8;
   --secondary-foreground: #1e2029;
   --muted: #f1f2f6;
   --muted-foreground: #666978;
   --accent: #eef2ff;
   --accent-foreground: #3730a3;
+
+  /* Status Colors */
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
+  --online: #10b981;
+  --offline: #94a3b8;
+
+  /* Borders & Focus */
   --border: #e2e4ea;
   --input: #e2e4ea;
   --ring: #6366f1;
+
+  /* Design Tokens: Border Radius */
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+  --radius-full: 9999px;
   --radius: 0.75rem;
+
+  /* Design Tokens: Spacing Scale */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 0.75rem;
+  --space-lg: 1rem;
+  --space-xl: 1.5rem;
+  --space-2xl: 2rem;
+
+  /* Design Tokens: Text Hierarchy */
+  --text-primary: #090a0f;
+  --text-secondary: #4b5563;
+  --text-muted: #94a3b8;
+
+  /* Design Tokens: Shadows */
+  --shadow-subtle: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.07), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+  --shadow-popover: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.03);
+  --shadow-glow: 0 0 20px -3px rgba(99, 102, 241, 0.3);
 }
 
 .dark {
+  /* Surface & Base Colors (OLED Dark Mode) */
   --background: #090a0f;
   --foreground: #f3f4f8;
   --card: #12131a;
   --card-foreground: #f3f4f8;
   --popover: #12131a;
   --popover-foreground: #f3f4f8;
+
+  /* Primary Brand Violet / Indigo */
   --primary: #6366f1;
   --primary-foreground: #ffffff;
   --primary-hover: #4f46e5;
-  --secondary: #191a24;
+
+  /* Secondary, Muted & Accent Surfaces */
+  --secondary: #181924;
   --secondary-foreground: #e2e4ea;
-  --muted: #191a24;
+  --muted: #181924;
   --muted-foreground: #8a8d9f;
   --accent: #1e1f30;
   --accent-foreground: #c7d2fe;
-  --destructive: #991b1b;
+
+  /* Status Colors */
+  --destructive: #dc2626;
   --destructive-foreground: #ffffff;
+  --online: #10b981;
+  --offline: #64748b;
+
+  /* Borders & Focus */
   --border: #222433;
   --input: #222433;
   --ring: #6366f1;
+
+  /* Design Tokens: Text Hierarchy (Dark) */
+  --text-primary: #f3f4f8;
+  --text-secondary: #9ca3af;
+  --text-muted: #64748b;
+
+  /* Design Tokens: Shadows (Dark) */
+  --shadow-subtle: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.4), 0 1px 2px -1px rgba(0, 0, 0, 0.3);
+  --shadow-popover: 0 12px 30px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 25px -2px rgba(99, 102, 241, 0.4);
 }
 
 @theme {
@@ -70,15 +131,26 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-online: var(--online);
+  --color-offline: var(--offline);
+
+  --font-sans: var(--font-geist-sans), "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-2xl: var(--radius-2xl);
+  --radius-full: var(--radius-full);
 }
 
 body {
   background-color: var(--background);
   color: var(--foreground);
+  font-family: var(--font-sans);
   font-feature-settings: "rlig" 1, "calt" 1;
 }
 
@@ -103,7 +175,7 @@ body {
   padding-right: env(safe-area-inset-right, 0px);
 }
 
-/* Eliminate 300ms mobile tap delay */
+/* Touch targets & eliminating 300ms mobile tap delay */
 button,
 a,
 input,
@@ -122,14 +194,14 @@ select,
 /* Subtle background glow pattern */
 .bg-mesh-gradient {
   background-image: 
-    radial-gradient(at 100% 0%, rgba(99, 102, 241, 0.08) 0px, transparent 50%),
-    radial-gradient(at 0% 100%, rgba(139, 92, 246, 0.08) 0px, transparent 50%);
+    radial-gradient(at 100% 0%, rgba(99, 102, 241, 0.06) 0px, transparent 45%),
+    radial-gradient(at 0% 100%, rgba(139, 92, 246, 0.05) 0px, transparent 45%);
 }
 
 .dark .bg-mesh-gradient {
   background-image: 
-    radial-gradient(at 100% 0%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
-    radial-gradient(at 0% 100%, rgba(139, 92, 246, 0.1) 0px, transparent 50%);
+    radial-gradient(at 100% 0%, rgba(99, 102, 241, 0.09) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(139, 92, 246, 0.07) 0px, transparent 50%);
 }
 
 /* Hide default browser scrollbars while retaining full scrollability */
@@ -156,4 +228,3 @@ select,
   -ms-overflow-style: none !important;
   scrollbar-width: none !important;
 }
-

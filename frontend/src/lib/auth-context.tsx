@@ -516,13 +516,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return updated;
     });
 
-    if (auth.currentUser && partial.displayName) {
+    if (auth.currentUser) {
+      if (partial.displayName) {
+        try {
+          await updateFirebaseProfile(auth.currentUser, {
+            displayName: partial.displayName,
+          });
+        } catch (err) {
+          console.warn("Failed to update Firebase profile display name:", err);
+        }
+      }
+
+      // Sync with MongoDB backend
       try {
-        await updateFirebaseProfile(auth.currentUser, {
-          displayName: partial.displayName,
-        });
+        const token = await auth.currentUser.getIdToken();
+        const patchBody: Record<string, string> = {};
+        if (partial.displayName) patchBody.display_name = partial.displayName;
+        if (partial.preferredReceivingLanguage) {
+          patchBody.preferred_receiving_language = partial.preferredReceivingLanguage;
+        }
+
+        if (Object.keys(patchBody).length > 0) {
+          const res = await fetch(`${getBackendUrl()}/api/v1/users/me`, {
+            method: "PATCH",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(patchBody),
+          });
+          if (!res.ok) {
+            console.warn(`Failed to patch profile to backend: status ${res.status}`);
+          }
+        }
       } catch (err) {
-        console.warn("Failed to update Firebase profile display name:", err);
+        console.warn("Error calling PATCH /api/v1/users/me:", err);
       }
     }
   };

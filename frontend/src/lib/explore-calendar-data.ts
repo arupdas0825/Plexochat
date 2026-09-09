@@ -64,6 +64,7 @@ export interface ConnectedFriend {
   chatId: string;
   lastActive: string;
   online: boolean;
+  preferredReceivingLanguage?: string;
 }
 
 export interface CalendarDayActivity {

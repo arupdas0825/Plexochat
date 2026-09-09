@@ -56,21 +56,25 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
         return;
       }
       const data = await res.json();
-      const mappedConns: ConnectedFriend[] = (data || []).map((c: any) => ({
-        id: c.id,
-        userId: c.peer_user_id,
-        displayName: c.peer_profile?.display_name || "User",
-        username: c.peer_profile?.username || "user",
-        avatarBg: "from-blue-600 to-indigo-600",
-        countryFlag: "🌐",
-        city: "",
-        country: "",
-        languagesSpoken: [c.peer_profile?.preferred_receiving_language || "English"],
-        languagesLearning: [],
-        chatId: c.id,
-        lastActive: "Connected",
-        online: true,
-      }));
+      const mappedConns: ConnectedFriend[] = (data || []).map((c: Record<string, unknown>) => {
+        const profile = (c.peer_profile || {}) as Record<string, string>;
+        return {
+          id: String(c.id || ""),
+          userId: String(c.peer_user_id || ""),
+          displayName: profile.display_name || "User",
+          username: profile.username || "user",
+          avatarBg: "from-blue-600 to-indigo-600",
+          countryFlag: "🌐",
+          city: "",
+          country: "",
+          languagesSpoken: [profile.preferred_receiving_language || "English"],
+          languagesLearning: [],
+          chatId: String(c.id || ""),
+          lastActive: "Connected",
+          online: true,
+          preferredReceivingLanguage: profile.preferred_receiving_language || "en",
+        };
+      });
       setConnections(mappedConns);
     } catch (err) {
       console.warn("Error fetching connections:", err);
@@ -89,39 +93,45 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
       const inData = inRes.ok ? await inRes.json() : [];
       const outData = outRes.ok ? await outRes.json() : [];
 
-      const mappedIn: StoredConnectionRequest[] = inData.map((r: any) => ({
-        id: r.id,
-        type: "incoming",
-        userId: r.sender_id,
-        displayName: r.peer_profile?.display_name || "User",
-        username: r.peer_profile?.username || "user",
-        avatarBg: "from-blue-600 to-indigo-600",
-        countryFlag: "🌐",
-        city: "",
-        country: "",
-        languagesSpoken: [r.peer_profile?.preferred_receiving_language || "English"],
-        languagesLearning: [],
-        note: r.note || "Hi, I'd like to connect on PlexoChat!",
-        sentAt: new Date(r.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        status: "pending",
-      }));
+      const mappedIn: StoredConnectionRequest[] = inData.map((r: Record<string, unknown>) => {
+        const profile = (r.peer_profile || {}) as Record<string, string>;
+        return {
+          id: String(r.id || ""),
+          type: "incoming",
+          userId: String(r.sender_id || ""),
+          displayName: profile.display_name || "User",
+          username: profile.username || "user",
+          avatarBg: "from-blue-600 to-indigo-600",
+          countryFlag: "🌐",
+          city: "",
+          country: "",
+          languagesSpoken: [profile.preferred_receiving_language || "English"],
+          languagesLearning: [],
+          note: (r.note as string) || "Hi, I'd like to connect on PlexoChat!",
+          sentAt: new Date(r.created_at as string).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "pending",
+        };
+      });
 
-      const mappedOut: StoredConnectionRequest[] = outData.map((r: any) => ({
-        id: r.id,
-        type: "outgoing",
-        userId: r.receiver_id,
-        displayName: r.peer_profile?.display_name || "User",
-        username: r.peer_profile?.username || "user",
-        avatarBg: "from-blue-600 to-indigo-600",
-        countryFlag: "🌐",
-        city: "",
-        country: "",
-        languagesSpoken: [r.peer_profile?.preferred_receiving_language || "English"],
-        languagesLearning: [],
-        note: r.note || "Connection request sent",
-        sentAt: new Date(r.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        status: "pending",
-      }));
+      const mappedOut: StoredConnectionRequest[] = outData.map((r: Record<string, unknown>) => {
+        const profile = (r.peer_profile || {}) as Record<string, string>;
+        return {
+          id: String(r.id || ""),
+          type: "outgoing",
+          userId: String(r.receiver_id || ""),
+          displayName: profile.display_name || "User",
+          username: profile.username || "user",
+          avatarBg: "from-blue-600 to-indigo-600",
+          countryFlag: "🌐",
+          city: "",
+          country: "",
+          languagesSpoken: [profile.preferred_receiving_language || "English"],
+          languagesLearning: [],
+          note: (r.note as string) || "Connection request sent",
+          sentAt: new Date(r.created_at as string).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "pending",
+        };
+      });
 
       setRequests([...mappedIn, ...mappedOut]);
     } catch (err) {
@@ -135,12 +145,18 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
 
   // Load initially when user / firebaseUser is ready
   useEffect(() => {
+    let active = true;
     if (firebaseUser) {
-      refreshConnections();
+      void refreshConnections();
     } else {
-      setConnections([]);
-      setRequests([]);
+      if (active) {
+        setConnections((prev) => (prev.length > 0 ? [] : prev));
+        setRequests((prev) => (prev.length > 0 ? [] : prev));
+      }
     }
+    return () => {
+      active = false;
+    };
   }, [firebaseUser, refreshConnections]);
 
   const pendingIncomingCount = requests.filter(

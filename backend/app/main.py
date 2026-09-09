@@ -20,6 +20,7 @@ from app.db.collections import get_pending_messages_collection
 from app.routers.auth import router as auth_router
 from app.routers.users import router as users_router
 from app.routers.connections import router as connections_router
+from app.routers.devices import router as devices_router
 from app.api.v1.ws import router as ws_router
 from app.db.indexes import ensure_indexes
 
@@ -41,6 +42,24 @@ async def _ensure_pending_messages_ttl_index() -> None:
     logger.info("pending_messages TTL index ensured (48-hour expiry).")
 
 
+async def _ensure_device_keys_indexes() -> None:
+    """Creates compound index on device_keys for efficient key lookup by user+device."""
+    from app.db.collections import get_device_keys_collection
+    col = get_device_keys_collection()
+    await col.create_index(
+        [("user_id", ASCENDING), ("device_identifier", ASCENDING)],
+        unique=True,
+        name="device_keys_user_device_unique",
+        background=True,
+    )
+    await col.create_index(
+        [("user_id", ASCENDING)],
+        name="device_keys_user_id",
+        background=True,
+    )
+    logger.info("device_keys indexes ensured.")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan manager for database connections and background tasks."""
@@ -58,6 +77,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as e:
         # Non-fatal: log and continue — messages will still work, TTL just won't auto-expire
         logger.warning(f"Could not create pending_messages TTL index: {e}")
+
+    # 2b. Ensure device_keys indexes
+    try:
+        await _ensure_device_keys_indexes()
+    except Exception as e:
+        logger.warning(f"Could not ensure device_keys indexes: {e}")
 
     # 3. Ensure collection indexes and backfill user fields
     try:
@@ -138,6 +163,7 @@ async def health_check() -> dict:
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
 app.include_router(connections_router, prefix="/api/v1")
+app.include_router(devices_router, prefix="/api/v1")
 app.include_router(ws_router, prefix="/api/v1")
 
 

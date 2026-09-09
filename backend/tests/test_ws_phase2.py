@@ -73,6 +73,9 @@ async def db_and_users():
 
 
 async def _ensure_connection(id_a: str, id_b: str, status: str = "ACCEPTED"):
+    import app.db.mongo as mongo_mod
+    if mongo_mod.db is None:
+        await mongo_mod.connect_to_mongo()
     col = get_connections_collection()
     now = datetime.now(timezone.utc)
     await col.update_one(
@@ -88,9 +91,15 @@ async def _ensure_connection(id_a: str, id_b: str, status: str = "ACCEPTED"):
         },
         upsert=True,
     )
+    # Clear stale pending messages for these test users so flushes don't interfere
+    col_pending = mongo_mod.db["pending_messages"]
+    await col_pending.delete_many({"$or": [{"to_user_id": id_a}, {"to_user_id": id_b}]})
 
 
 async def _remove_connection(id_a: str, id_b: str):
+    import app.db.mongo as mongo_mod
+    if mongo_mod.db is None:
+        await mongo_mod.connect_to_mongo()
     col = get_connections_collection()
     await col.delete_many({
         "$or": [
@@ -182,8 +191,10 @@ async def test_ws_ack_relayed_to_sender(db_and_users):
             # B acks
             ws_b.send_json({"type": "ack", "client_message_id": client_msg_id})
 
-            # A gets ack_relay
+            # A gets ack_relay (skipping presence frame if B's online event arrives first)
             relay = ws_a.receive_json()
+            if relay.get("type") == "presence":
+                relay = ws_a.receive_json()
             assert relay["type"] == "ack_relay", f"Expected 'ack_relay', got {relay}"
             assert relay["client_message_id"] == client_msg_id
 

@@ -13,8 +13,12 @@ import {
   TrendingUp,
   Languages,
   Clock,
+  ListFilter,
+  CalendarDays,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { UserAvatar } from "@/components/ui/user-avatar";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useChat } from "@/lib/chat-context";
 import {
   computeCalendarDataFromThreads,
@@ -28,6 +32,7 @@ export function ConversationCalendarView() {
   const today = new Date();
   const todayStr = today.toISOString().split("T")[0];
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
+  const [mobileView, setMobileView] = useState<"agenda" | "month">("agenda");
 
   const currentMonthName = today.toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const year = today.getFullYear();
@@ -61,135 +66,224 @@ export function ConversationCalendarView() {
 
   const selectedActivity: CalendarDayActivity | undefined = dynamicCalendarData[selectedDate];
 
+  // Agenda list of all active days sorted chronologically descending
+  const agendaDays = useMemo(() => {
+    return Object.entries(dynamicCalendarData)
+      .sort(([dateA], [dateB]) => dateB.localeCompare(dateA))
+      .map(([date, activity]) => ({ date, activity }));
+  }, [dynamicCalendarData]);
+
   return (
-    <div className="flex-1 h-full overflow-y-auto p-4 md:p-6 lg:p-8 pb-28 md:pb-8 space-y-6 max-w-7xl mx-auto w-full">
-      
+    <div className="flex-1 h-full overflow-y-auto no-scrollbar p-4 md:p-6 lg:p-8 pb-28 md:pb-8 space-y-6 max-w-6xl mx-auto w-full select-none">
       {/* 1. Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pb-2 border-b border-border/60">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-border/70">
         <div>
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-              <CalendarIcon className="w-4 h-4" />
-            </div>
-            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-foreground">
+          <div className="flex items-center gap-2">
+            <CalendarIcon className="w-5 h-5 text-primary" />
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
               Conversation Calendar
             </h1>
           </div>
-          <p className="text-xs md:text-sm text-muted-foreground mt-1">
-            Track your language practice frequency, message milestones, and shared photos in real-time.
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Track your language practice frequency, message milestones, and shared cultural moments.
           </p>
         </div>
 
-        {/* Legend */}
-        <div className="flex items-center gap-3 text-xs bg-secondary/50 border border-border/70 rounded-2xl px-3 py-1.5 self-start md:self-center">
-          <span className="flex items-center gap-1 text-muted-foreground">
-            <span className="w-2 h-2 rounded-full bg-blue-500" />
-            <span>Messages</span>
-          </span>
-          <span className="flex items-center gap-1 text-muted-foreground">
-            <ImageIcon className="w-3 h-3 text-amber-500" />
-            <span>Photos</span>
-          </span>
-          <span className="flex items-center gap-1 text-muted-foreground">
-            <Star className="w-3 h-3 text-purple-500 fill-purple-500" />
-            <span>Connection</span>
-          </span>
+        {/* Mobile View Toggle (Agenda vs Month) */}
+        <div className="flex items-center gap-1.5 md:hidden">
+          <button
+            type="button"
+            onClick={() => setMobileView("agenda")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border ${
+              mobileView === "agenda"
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-secondary text-muted-foreground border-border/80"
+            }`}
+          >
+            <ListFilter className="w-3.5 h-3.5" />
+            <span>Agenda</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileView("month")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border ${
+              mobileView === "month"
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-secondary text-muted-foreground border-border/80"
+            }`}
+          >
+            <CalendarDays className="w-3.5 h-3.5" />
+            <span>Month</span>
+          </button>
         </div>
       </div>
 
-      {/* 2. Monthly Summary Stat Cards (100% Real Dynamic Values) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <div className="p-4 rounded-2xl bg-card border border-border/70 shadow-sm">
-          <div className="flex items-center justify-between text-muted-foreground text-xs mb-2">
-            <span>Total Messages</span>
-            <MessageSquare className="w-4 h-4 text-blue-500" />
+      {/* 2. Compact Monthly Summary Stat Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+        <div className="p-3.5 rounded-xl bg-card border border-border/70 shadow-xs">
+          <div className="flex items-center justify-between text-muted-foreground text-xs mb-1">
+            <span className="text-[11px] font-medium">Messages Exchanged</span>
+            <MessageSquare className="w-3.5 h-3.5 text-blue-500" />
           </div>
-          <div className="text-2xl font-bold text-foreground">
+          <div className="text-xl font-bold text-foreground tracking-tight">
             {totalMessagesMonth}
           </div>
-          <div className="text-[11px] text-muted-foreground font-mono mt-0.5">
-            {totalMessagesMonth === 0 ? "No messages recorded yet" : `${totalMessagesMonth} messages exchanged`}
+          <div className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate">
+            {totalMessagesMonth === 0 ? "0 messages" : `${totalMessagesMonth} messages`}
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-card border border-border/70 shadow-sm">
-          <div className="flex items-center justify-between text-muted-foreground text-xs mb-2">
-            <span>Active Days</span>
-            <TrendingUp className="w-4 h-4 text-emerald-500" />
+        <div className="p-3.5 rounded-xl bg-card border border-border/70 shadow-xs">
+          <div className="flex items-center justify-between text-muted-foreground text-xs mb-1">
+            <span className="text-[11px] font-medium">Active Practice Days</span>
+            <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
           </div>
-          <div className="text-2xl font-bold text-foreground">
+          <div className="text-xl font-bold text-foreground tracking-tight">
             {activeDaysCount} {activeDaysCount === 1 ? "Day" : "Days"}
           </div>
-          <div className="text-[11px] text-muted-foreground font-mono mt-0.5">
-            {activeDaysCount === 0 ? "0 practice sessions" : "Active chatting sessions"}
+          <div className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate">
+            {activeDaysCount === 0 ? "0 sessions" : "Active chat days"}
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-card border border-border/70 shadow-sm">
-          <div className="flex items-center justify-between text-muted-foreground text-xs mb-2">
-            <span>Photos Shared</span>
-            <ImageIcon className="w-4 h-4 text-amber-500" />
+        <div className="p-3.5 rounded-xl bg-card border border-border/70 shadow-xs">
+          <div className="flex items-center justify-between text-muted-foreground text-xs mb-1">
+            <span className="text-[11px] font-medium">Photos Shared</span>
+            <ImageIcon className="w-3.5 h-3.5 text-amber-500" />
           </div>
-          <div className="text-2xl font-bold text-foreground">
+          <div className="text-xl font-bold text-foreground tracking-tight">
             {totalPhotosMonth}
           </div>
-          <div className="text-[11px] text-muted-foreground font-mono mt-0.5">
-            {totalPhotosMonth === 0 ? "0 encrypted photos" : `${totalPhotosMonth} shared photos`}
+          <div className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate">
+            {totalPhotosMonth === 0 ? "0 photos" : `${totalPhotosMonth} encrypted`}
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-card border border-border/70 shadow-sm">
-          <div className="flex items-center justify-between text-muted-foreground text-xs mb-2">
-            <span>Languages Practiced</span>
-            <Languages className="w-4 h-4 text-purple-500" />
+        <div className="p-3.5 rounded-xl bg-card border border-border/70 shadow-xs">
+          <div className="flex items-center justify-between text-muted-foreground text-xs mb-1">
+            <span className="text-[11px] font-medium">Languages Practiced</span>
+            <Languages className="w-3.5 h-3.5 text-purple-500" />
           </div>
-          <div className="text-2xl font-bold text-foreground">
-            {uniqueLangs.size}
+          <div className="text-xl font-bold text-foreground tracking-tight">
+            {Math.max(uniqueLangs.size, 1)}
           </div>
-          <div className="text-[11px] text-muted-foreground font-mono mt-0.5 truncate">
-            {uniqueLangs.size === 0 ? "0 language pairs" : Array.from(uniqueLangs).join(", ")}
+          <div className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate">
+            {uniqueLangs.size === 0 ? "Direct" : Array.from(uniqueLangs).join(", ")}
           </div>
         </div>
       </div>
 
-      {/* 3. Main Split Section: Calendar Grid (Left) + Selected Day Breakdown (Right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* Calendar Grid (7 Cols) */}
-        <div className="lg:col-span-7 rounded-3xl border border-border/80 bg-card p-5 sm:p-6 shadow-sm space-y-4">
-          
-          {/* Calendar Month Navigation Header */}
+      {/* 3. Mobile Agenda View (when on mobile and 'agenda' selected) */}
+      <div className={`space-y-3 ${mobileView === "agenda" ? "block md:hidden" : "hidden"}`}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold text-foreground">Practice Agenda</h2>
+          <span className="text-[11px] font-mono text-muted-foreground">
+            {agendaDays.length} Active Days
+          </span>
+        </div>
+
+        {agendaDays.length === 0 ? (
+          <EmptyState
+            icon={CalendarIcon}
+            title="No scheduled practice sessions"
+            description="Start chatting with connections to automatically log language exchange sessions and milestones."
+            className="p-8"
+          />
+        ) : (
+          <div className="space-y-2.5">
+            {agendaDays.map(({ date, activity }) => (
+              <div
+                key={date}
+                className="p-3.5 rounded-2xl bg-card border border-border/80 shadow-xs space-y-2"
+              >
+                <div className="flex items-center justify-between pb-2 border-b border-border/50">
+                  <span className="font-bold text-xs text-foreground">
+                    {new Date(date).toLocaleDateString("en-US", {
+                      weekday: "short",
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </span>
+                  <div className="flex items-center gap-2 text-[10px] font-mono text-muted-foreground">
+                    <span>💬 {activity.messagesCount} msgs</span>
+                    {activity.photosCount > 0 && <span>📷 {activity.photosCount} photos</span>}
+                  </div>
+                </div>
+
+                {activity.conversations.map((session, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between gap-2 p-2 rounded-xl bg-secondary/40"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <UserAvatar
+                        name={session.partnerName}
+                        avatarBg={session.partnerAvatarBg}
+                        size="sm"
+                      />
+                      <div className="min-w-0">
+                        <div className="font-semibold text-xs text-foreground truncate">
+                          {session.partnerName}
+                        </div>
+                        <div className="text-[10px] text-primary font-mono truncate">
+                          {session.languagePair}
+                        </div>
+                      </div>
+                    </div>
+
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        selectThread(session.chatId);
+                        router.push("/chats");
+                      }}
+                      className="h-7 px-2 text-[11px] rounded-lg text-primary gap-1"
+                    >
+                      <span>Chat</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 4. Desktop Month Grid (7 Cols) + Day Breakdown (5 Cols) / Mobile Month View */}
+      <div
+        className={`grid grid-cols-1 lg:grid-cols-12 gap-5 ${
+          mobileView === "agenda" ? "hidden md:grid" : "grid"
+        }`}
+      >
+        {/* Calendar Month Grid */}
+        <div className="lg:col-span-7 rounded-2xl border border-border/80 bg-card p-4 sm:p-5 shadow-xs space-y-3">
           <div className="flex items-center justify-between pb-2 border-b border-border/50">
-            <h2 className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
-              <span>{currentMonthName}</span>
+            <h2 className="text-sm sm:text-base font-bold text-foreground">
+              {currentMonthName}
             </h2>
-            <div className="flex items-center gap-1">
-              <Button size="icon" variant="ghost" className="h-8 w-8 rounded-xl" disabled>
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              <Button size="icon" variant="ghost" className="h-8 w-8 rounded-xl" disabled>
-                <ChevronRight className="w-4 h-4" />
-              </Button>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground font-mono">
+              <span className="w-2 h-2 rounded-full bg-blue-500" />
+              <span>Messages Active</span>
             </div>
           </div>
 
-          {/* Weekday Labels */}
-          <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider font-mono">
+          {/* Weekdays */}
+          <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-muted-foreground uppercase tracking-wider font-mono">
             {weekdays.map((day) => (
-              <div key={day} className="py-1">
+              <div key={day} className="py-0.5">
                 {day}
               </div>
             ))}
           </div>
 
-          {/* Calendar Day Cells */}
-          <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
-            {/* Empty prefix slots */}
+          {/* Days Grid */}
+          <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
             {Array.from({ length: startDayOffset }).map((_, i) => (
-              <div key={`empty-${i}`} className="aspect-square rounded-2xl bg-secondary/10 opacity-30" />
+              <div key={`empty-${i}`} className="aspect-square rounded-xl bg-secondary/10 opacity-20" />
             ))}
 
-            {/* Actual Month Days */}
             {Array.from({ length: daysInMonth }).map((_, idx) => {
               const dayNum = idx + 1;
               const dateStr = `${year}-${(month + 1).toString().padStart(2, "0")}-${dayNum.toString().padStart(2, "0")}`;
@@ -201,116 +295,99 @@ export function ConversationCalendarView() {
                   key={dateStr}
                   type="button"
                   onClick={() => setSelectedDate(dateStr)}
-                  className={`aspect-square p-1.5 sm:p-2 rounded-2xl border transition-all flex flex-col justify-between text-left relative group ${
+                  className={`aspect-square p-1 sm:p-1.5 rounded-xl border transition-all flex flex-col justify-between text-left cursor-pointer ${
                     isSelected
-                      ? "bg-primary/15 border-primary ring-2 ring-primary/30 shadow-md"
+                      ? "bg-primary/15 border-primary ring-1.5 ring-primary/30"
                       : activity
-                      ? "bg-secondary/40 border-border hover:border-primary/40 hover:bg-secondary/70"
+                      ? "bg-secondary/40 border-border/70 hover:border-primary/40"
                       : "bg-card border-border/40 text-muted-foreground hover:bg-secondary/30"
                   }`}
                 >
-                  {/* Day Number */}
                   <div className="flex items-center justify-between w-full">
                     <span
                       className={`text-xs font-bold ${
-                        isSelected
-                          ? "text-primary"
-                          : activity
-                          ? "text-foreground"
-                          : "text-muted-foreground/80"
+                        isSelected ? "text-primary" : activity ? "text-foreground" : "text-muted-foreground/80"
                       }`}
                     >
                       {dayNum}
                     </span>
-
                     {activity?.newConnection && (
                       <Star className="w-2.5 h-2.5 text-purple-500 fill-purple-500" />
                     )}
                   </div>
 
-                  {/* Activity Indicators */}
                   {activity && (
-                    <div className="flex items-center gap-1 mt-auto pt-1">
-                      <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                    <div className="flex items-center gap-0.5 mt-auto">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
                       {activity.photosCount > 0 && (
                         <ImageIcon className="w-2.5 h-2.5 text-amber-500 shrink-0" />
                       )}
-                      <span className="text-[9px] font-mono text-muted-foreground ml-auto hidden sm:inline">
-                        {activity.messagesCount}m
-                      </span>
                     </div>
                   )}
                 </button>
               );
             })}
           </div>
-
         </div>
 
-        {/* Selected Day Activity Detail Panel (5 Cols) */}
-        <div className="lg:col-span-5 rounded-3xl border border-border/80 bg-card p-5 sm:p-6 shadow-sm flex flex-col justify-between space-y-4">
-          
-          <div className="space-y-4">
-            {/* Day Header */}
-            <div className="pb-3 border-b border-border/60">
+        {/* Selected Day Activity Panel */}
+        <div className="lg:col-span-5 rounded-2xl border border-border/80 bg-card p-4 sm:p-5 shadow-xs flex flex-col justify-between space-y-3">
+          <div className="space-y-3">
+            <div className="pb-2.5 border-b border-border/60">
               <span className="text-[10px] font-mono uppercase tracking-wider text-primary font-bold">
                 Daily Conversation Log
               </span>
-              <h3 className="text-lg font-bold text-foreground mt-0.5">
+              <h3 className="text-sm sm:text-base font-bold text-foreground mt-0.5">
                 {new Date(selectedDate).toLocaleDateString("en-US", {
-                  weekday: "long",
-                  month: "long",
+                  weekday: "short",
+                  month: "short",
                   day: "numeric",
                   year: "numeric",
                 })}
               </h3>
-
               {selectedActivity ? (
-                <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1 font-mono">
-                  <span>💬 {selectedActivity.messagesCount} messages</span>
+                <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-mono mt-0.5">
+                  <span>💬 {selectedActivity.messagesCount} msgs</span>
                   <span>•</span>
                   <span>📷 {selectedActivity.photosCount} photos</span>
-                  <span>•</span>
-                  <span>{selectedActivity.conversations.length} sessions</span>
                 </div>
               ) : (
-                <p className="text-xs text-muted-foreground mt-1">
-                  No conversations logged on this date.
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  No sessions recorded on this day.
                 </p>
               )}
             </div>
 
-            {/* Conversation list for that day */}
             {selectedActivity && selectedActivity.conversations.length > 0 ? (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {selectedActivity.conversations.map((session, i) => (
                   <div
                     key={i}
-                    className="p-4 rounded-2xl bg-secondary/30 border border-border/60 space-y-2.5"
+                    className="p-3 rounded-xl bg-secondary/30 border border-border/60 space-y-1.5"
                   >
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className={`w-9 h-9 rounded-full bg-gradient-to-br ${session.partnerAvatarBg} text-white font-bold text-xs flex items-center justify-center shadow-sm`}
-                        >
-                          {session.partnerName.substring(0, 2).toUpperCase()}
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <UserAvatar
+                          name={session.partnerName}
+                          avatarBg={session.partnerAvatarBg}
+                          size="sm"
+                        />
                         <div>
-                          <div className="font-bold text-xs text-foreground flex items-center gap-1.5">
-                            <span>{session.partnerName}</span>
+                          <div className="font-bold text-xs text-foreground truncate">
+                            {session.partnerName}
                           </div>
-                          <div className="text-[10px] text-primary font-mono font-medium">
+                          <div className="text-[10px] text-primary font-mono">
                             {session.languagePair}
                           </div>
                         </div>
                       </div>
 
-                      <span className="px-2 py-0.5 rounded-full bg-secondary text-muted-foreground text-[10px] font-mono">
+                      <span className="px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground text-[10px] font-mono">
                         {session.messagesCount} msgs
                       </span>
                     </div>
 
-                    <p className="text-xs text-muted-foreground leading-relaxed italic bg-card/60 p-2.5 rounded-xl border border-border/40">
+                    <p className="text-xs text-muted-foreground italic bg-card/60 p-2 rounded-lg border border-border/40 line-clamp-2">
                       &quot;{session.previewSnippet}&quot;
                     </p>
 
@@ -321,40 +398,29 @@ export function ConversationCalendarView() {
                         selectThread(session.chatId);
                         router.push("/chats");
                       }}
-                      className="w-full text-xs font-semibold rounded-xl text-primary hover:bg-primary/10 gap-1.5 mt-1"
+                      className="w-full text-xs font-semibold rounded-xl text-primary hover:bg-primary/10 gap-1.5 h-7.5 mt-0.5"
                     >
-                      <span>Jump to Chat History</span>
+                      <span>Jump to Chat</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </Button>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="p-8 text-center rounded-2xl bg-secondary/20 border border-dashed border-border/70 space-y-2">
-                <Clock className="w-8 h-8 text-muted-foreground mx-auto opacity-70" />
+              <div className="p-6 text-center rounded-xl bg-secondary/20 border border-dashed border-border/60 space-y-2">
+                <Clock className="w-6 h-6 text-muted-foreground mx-auto opacity-70" />
                 <p className="text-xs text-muted-foreground">
-                  No communication recorded on this day. Start a chat or explore members to begin practicing!
+                  No conversation logs for this day.
                 </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => router.push("/explore")}
-                  className="text-xs rounded-xl"
-                >
-                  Explore Partners
-                </Button>
               </div>
             )}
           </div>
 
-          <div className="pt-3 border-t border-border/50 text-[10px] text-muted-foreground text-center">
-            🔒 Calendar activity is computed dynamically from real encrypted device sessions.
+          <div className="pt-2 border-t border-border/50 text-[10px] text-muted-foreground text-center font-mono">
+            🔒 Logged from encrypted client sessions
           </div>
-
         </div>
-
       </div>
-
     </div>
   );
 }

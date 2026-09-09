@@ -1,6 +1,7 @@
 """User discovery, profile lookup, and search endpoints."""
 
 import re
+from datetime import datetime, timezone
 from typing import List, Optional
 from bson import ObjectId
 from fastapi import APIRouter, Depends, Query
@@ -14,7 +15,7 @@ from app.db.collections import (
     get_connection_requests_collection,
 )
 from app.models.connection import RelationshipStatus, UserProfilePublic
-from app.models.user import User
+from app.models.user import User, UserUpdate
 from app.services.rate_limiter import rate_limiter
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -213,3 +214,48 @@ async def get_user_profile(
         relationship_status=rel_status,
         connection_request_id=req_id,
     )
+
+
+@router.patch(
+    "/me",
+    summary="Update own profile (language / display name)",
+    description=(
+        "Allows the authenticated user to update their preferred_receiving_language "
+        "and/or display_name. Language code is strictly validated against the "
+        "supported enum — any unrecognised code is rejected with 422."
+    ),
+)
+async def update_own_profile(
+    payload: UserUpdate,
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Persist profile updates (language, display name) for the authenticated user."""
+    await rate_limiter.check(f"profile_update:{current_user.id}", max_requests=30, window_seconds=60)
+
+    update_fields: dict = {"updated_at": datetime.now(timezone.utc)}
+    if payload.preferred_receiving_language is not None:
+        update_fields["preferred_receiving_language"] = payload.preferred_receiving_language
+    if payload.display_name is not None:
+        update_fields["display_name"] = payload.display_name
+
+    if len(update_fields) == 1:  # only updated_at — nothing to do
+        return {"status": "ok", "message": "No changes provided."}
+
+    users_col = get_users_collection()
+    await users_col.update_one(
+        {"_id": current_user.id if not ObjectId.is_valid(current_user.id) else ObjectId(current_user.id)},
+        {"$set": update_fields},
+    )
+
+    logger.info(
+        f"Profile updated: user_id={current_user.id} fields={list(update_fields.keys())}"
+    )
+    return {
+        "status": "ok",
+        "id": str(current_user.id),
+        "preferred_receiving_language": update_fields.get(
+            "preferred_receiving_language", current_user.preferred_receiving_language
+        ),
+        "display_name": update_fields.get("display_name", current_user.display_name),
+        "updated_fields": [k for k in update_fields if k != "updated_at"],
+    }

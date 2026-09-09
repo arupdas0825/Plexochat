@@ -11,8 +11,23 @@ const rootDir =
 
 const isDev = process.env.NODE_ENV !== "production";
 loadEnvConfig(rootDir, isDev, console, true);
-
 const nextConfig: NextConfig = {
+  turbopack: {
+    resolveAlias: {
+      fs: "./src/lib/empty-module.js",
+      path: "./src/lib/empty-module.js",
+    },
+  },
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+      };
+    }
+    return config;
+  },
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
     NEXT_PUBLIC_WS_URL: process.env.NEXT_PUBLIC_WS_URL,

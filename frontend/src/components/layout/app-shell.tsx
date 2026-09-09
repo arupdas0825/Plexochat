@@ -1,22 +1,29 @@
 "use client";
 
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Home,
   MessageSquare,
-  Globe2,
+  Compass,
   Calendar,
   Settings,
   Languages,
+  ChevronDown,
+  Copy,
+  Check,
+  LogOut,
+  User,
+  ShieldCheck,
 } from "lucide-react";
 import { useAuth, SUPPORTED_LANGUAGES } from "@/lib/auth-context";
 import { useConnections } from "@/lib/connections-context";
 import { useChat } from "@/lib/chat-context";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { FloatingBottomNav } from "./floating-bottom-nav";
 
 interface AppShellProps {
@@ -26,16 +33,50 @@ interface AppShellProps {
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, isAuthenticated, isLoading, updateProfile } = useAuth();
+  const { user, isAuthenticated, isLoading, updateProfile, logout } = useAuth();
   const { pendingIncomingCount } = useConnections();
   const { unreadTotal, activeThreadId } = useChat();
+
+  const [isLangOpen, setIsLangOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [copiedId, setCopiedId] = useState(false);
+
+  const langMenuRef = useRef<HTMLDivElement>(null);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
   const isChatOpenOnMobile = pathname === "/chats" && activeThreadId !== null;
 
-  React.useEffect(() => {
+  // Authentication redirect guard
+  useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.replace("/login");
     }
   }, [isAuthenticated, isLoading, router]);
+
+  // Click-outside handlers for desktop popovers
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (langMenuRef.current && !langMenuRef.current.contains(e.target as Node)) {
+        setIsLangOpen(false);
+      }
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
+        setIsProfileOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsLangOpen(false);
+        setIsProfileOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
 
   const navItems = [
     {
@@ -47,7 +88,7 @@ export function AppShell({ children }: AppShellProps) {
     {
       label: "Explore",
       href: "/explore",
-      icon: Globe2,
+      icon: Compass,
       badge: pendingIncomingCount > 0 ? pendingIncomingCount : null,
     },
     {
@@ -70,44 +111,58 @@ export function AppShell({ children }: AppShellProps) {
     },
   ];
 
-  const handleLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selected = SUPPORTED_LANGUAGES.find((l) => l.code === e.target.value);
-    if (selected) {
-      updateProfile({
-        preferredReceivingLanguage: selected.code,
-        preferredLanguageName: selected.name,
-      });
-    }
+  const currentLang =
+    SUPPORTED_LANGUAGES.find((l) => l.code === (user?.preferredReceivingLanguage || "en")) ||
+    SUPPORTED_LANGUAGES[0];
+
+  const handleSelectLanguage = (langCode: string, langName: string) => {
+    updateProfile({
+      preferredReceivingLanguage: langCode,
+      preferredLanguageName: langName,
+    });
+    setIsLangOpen(false);
+  };
+
+  const handleCopyId = () => {
+    if (!user?.plexoChatId && !user?.username) return;
+    const idToCopy = user.plexoChatId || `@${user.username}`;
+    navigator.clipboard?.writeText(idToCopy);
+    setCopiedId(true);
+    setTimeout(() => setCopiedId(false), 2000);
+  };
+
+  const handleSignOut = async () => {
+    setIsProfileOpen(false);
+    await logout();
+    router.replace("/login");
   };
 
   return (
     <div className="min-h-screen min-h-[100dvh] h-screen h-[100dvh] flex flex-col bg-background text-foreground overflow-hidden">
-      
-      {/* 1. Desktop Top Header (Clean, spacious, minimal edge-to-edge navbar) */}
-      <header className="hidden md:flex items-center justify-between px-6 lg:px-8 py-3 bg-card/90 backdrop-blur-md border-b border-border/70 z-30 shrink-0 w-full select-none">
-        
-        {/* Left: PlexoChat Logo & Name */}
+      {/* 1. Desktop Top Header (SaaS / Productivity Polish) */}
+      <header className="hidden md:flex items-center justify-between px-6 lg:px-8 h-14 bg-card/95 backdrop-blur-md border-b border-border/80 z-30 shrink-0 w-full select-none">
+        {/* Left: PlexoChat Brand */}
         <div className="flex items-center gap-3 shrink-0 min-w-[180px]">
           <Link href="/home" className="flex items-center gap-2.5 group">
-            <div className="w-8 h-8 relative flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
+            <div className="w-7 h-7 relative flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
               <Image
                 src="/logo.png"
                 alt="PlexoChat Logo"
-                width={32}
-                height={32}
-                className="w-8 h-8 object-contain drop-shadow-sm"
+                width={28}
+                height={28}
+                className="w-7 h-7 object-contain drop-shadow-xs"
                 priority
               />
             </div>
-            <span className="font-bold text-base tracking-tight text-foreground">
+            <span className="font-bold text-sm tracking-tight text-foreground">
               PlexoChat
             </span>
           </Link>
         </div>
 
-        {/* Center: Navigation Pill shifted slightly to the right */}
-        <div className="flex-1 flex items-center justify-center translate-x-10 lg:translate-x-20">
-          <nav className="flex items-center gap-1 p-1 rounded-full bg-secondary/50 dark:bg-zinc-800/50 border border-border/60 shadow-xs">
+        {/* Center: Global Navigation Pill */}
+        <div className="flex-1 flex items-center justify-center">
+          <nav className="flex items-center gap-1 p-1 rounded-full bg-secondary/60 dark:bg-muted/60 border border-border/70 shadow-xs">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive =
@@ -119,24 +174,24 @@ export function AppShell({ children }: AppShellProps) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`relative px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-2 transition-all duration-200 ${
+                  className={`relative px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-2 transition-all duration-150 ${
                     isActive
-                      ? "text-primary"
-                      : "text-muted-foreground hover:text-foreground hover:bg-white/40 dark:hover:bg-white/5"
+                      ? "text-primary font-semibold"
+                      : "text-muted-foreground hover:text-foreground hover:bg-card/50"
                   }`}
                 >
                   {isActive && (
                     <motion.div
                       layoutId="activeDesktopTopNavPill"
-                      className="absolute inset-0 rounded-full bg-primary/12 dark:bg-primary/20 border border-primary/25 shadow-xs"
+                      className="absolute inset-0 rounded-full bg-primary/10 dark:bg-primary/20 border border-primary/25 shadow-xs"
                       transition={{ type: "spring", stiffness: 400, damping: 30 }}
                     />
                   )}
-                  <Icon className="w-4 h-4 relative z-10" />
+                  <Icon className="w-3.5 h-3.5 relative z-10" />
                   <span className="relative z-10">{item.label}</span>
                   {item.badge !== null && item.badge > 0 && (
-                    <span className="relative z-10 px-1.5 py-0.2 rounded-full bg-primary text-primary-foreground text-[9px] font-bold font-mono">
-                      {item.badge}
+                    <span className="relative z-10 px-1.5 py-0.2 rounded-full bg-primary text-primary-foreground text-[9px] font-bold font-mono shadow-xs">
+                      {item.badge > 99 ? "99+" : item.badge}
                     </span>
                   )}
                 </Link>
@@ -145,64 +200,185 @@ export function AppShell({ children }: AppShellProps) {
           </nav>
         </div>
 
-        {/* Right: Language Selector, Theme Toggle, User Profile Area */}
-        <div className="flex items-center gap-3 shrink-0 min-w-[180px] justify-end">
-          {/* Receiving Language Quick Selector */}
-          <div className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary/40 border border-border/70 text-xs hover:border-border transition-colors">
-            <Languages className="w-3.5 h-3.5 text-primary shrink-0" />
-            <select
-              value={user?.preferredReceivingLanguage || "en"}
-              onChange={handleLanguageChange}
-              aria-label="Preferred receiving language"
-              className="bg-transparent text-xs text-foreground font-medium focus:outline-none cursor-pointer pr-1"
+        {/* Right: Language Selector, Theme Toggle, Profile Popover */}
+        <div className="flex items-center gap-2.5 shrink-0 min-w-[180px] justify-end">
+          {/* Language Popover Menu */}
+          <div ref={langMenuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setIsLangOpen((prev) => !prev);
+                setIsProfileOpen(false);
+              }}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-secondary/50 hover:bg-secondary border border-border/80 text-xs font-medium transition-colors cursor-pointer"
+              title="Receiving Language Preference"
+              aria-expanded={isLangOpen}
             >
-              {SUPPORTED_LANGUAGES.map((lang) => (
-                <option key={lang.code} value={lang.code} className="bg-card text-foreground">
-                  {lang.flag} {lang.name}
-                </option>
-              ))}
-            </select>
+              <Languages className="w-3.5 h-3.5 text-primary shrink-0" />
+              <span className="text-xs">{currentLang.flag}</span>
+              <span className="uppercase text-[11px] font-mono font-semibold text-foreground">
+                {currentLang.code}
+              </span>
+              <ChevronDown className="w-3 h-3 text-muted-foreground opacity-70" />
+            </button>
+
+            <AnimatePresence>
+              {isLangOpen && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 4 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 4 }}
+                  transition={{ duration: 0.12 }}
+                  className="absolute right-0 mt-2 w-56 rounded-2xl bg-card/95 backdrop-blur-xl border border-border p-1.5 shadow-xl z-50 focus:outline-none"
+                >
+                  <div className="px-3 py-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider border-b border-border/50 mb-1">
+                    Receiving Language
+                  </div>
+                  <div className="max-h-56 overflow-y-auto no-scrollbar space-y-0.5">
+                    {SUPPORTED_LANGUAGES.map((lang) => {
+                      const isSelected = lang.code === currentLang.code;
+                      return (
+                        <button
+                          key={lang.code}
+                          type="button"
+                          onClick={() => handleSelectLanguage(lang.code, lang.name)}
+                          className={`w-full px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between transition-colors cursor-pointer ${
+                            isSelected
+                              ? "bg-primary/10 text-primary font-semibold"
+                              : "text-foreground hover:bg-secondary"
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <span>{lang.flag}</span>
+                            <span>{lang.name}</span>
+                          </span>
+                          {isSelected && <Check className="w-3.5 h-3.5 text-primary" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           <ThemeToggle />
 
-          {/* User Profile Identity Chip */}
-          <Link
-            href="/settings"
-            title="Profile & Settings"
-            className="flex items-center gap-2.5 pl-1 pr-3 py-1 rounded-full hover:bg-secondary/60 transition-colors border border-transparent hover:border-border/60"
-          >
-            <div className="relative">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-violet-500 text-white flex items-center justify-center font-bold text-xs shadow-xs">
-                {user?.displayName ? user.displayName.substring(0, 1).toUpperCase() : "U"}
+          {/* User Profile Popover Chip */}
+          <div ref={profileMenuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setIsProfileOpen((prev) => !prev);
+                setIsLangOpen(false);
+              }}
+              className="flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-full hover:bg-secondary/70 border border-border/60 hover:border-border transition-colors cursor-pointer select-none"
+              title="Profile & Menu"
+              aria-expanded={isProfileOpen}
+            >
+              <UserAvatar
+                name={user?.displayName || "You"}
+                size="sm"
+                online={true}
+              />
+              <div className="text-left hidden lg:block leading-tight">
+                <div className="text-xs font-semibold text-foreground truncate max-w-[90px]">
+                  {user?.displayName || "You"}
+                </div>
               </div>
-              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-card" />
-            </div>
-            <div className="text-left hidden lg:block">
-              <div className="text-xs font-semibold text-foreground leading-tight truncate max-w-[100px]">
-                {user?.displayName || "You"}
-              </div>
-              <div className="text-[10px] text-muted-foreground font-mono leading-none truncate max-w-[100px]">
-                {user?.plexoChatId || "PX-8921-X"}
-              </div>
-            </div>
-          </Link>
-        </div>
+              <ChevronDown className="w-3 h-3 text-muted-foreground opacity-70" />
+            </button>
 
+            <AnimatePresence>
+              {isProfileOpen && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 4 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 4 }}
+                  transition={{ duration: 0.12 }}
+                  className="absolute right-0 mt-2 w-64 rounded-2xl bg-card/95 backdrop-blur-xl border border-border p-2 shadow-xl z-50 focus:outline-none"
+                >
+                  {/* Popover Header with Avatar & ID */}
+                  <div className="p-2.5 rounded-xl bg-secondary/50 border border-border/60 mb-2">
+                    <div className="flex items-center gap-2.5">
+                      <UserAvatar
+                        name={user?.displayName || "You"}
+                        size="md"
+                        online={true}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-xs text-foreground truncate">
+                          {user?.displayName || "You"}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground font-mono truncate">
+                          {user?.plexoChatId || `@${user?.username || "user"}`}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleCopyId}
+                        className="p-1.5 rounded-lg hover:bg-card text-muted-foreground hover:text-foreground transition-colors"
+                        title="Copy PlexoChat ID"
+                      >
+                        {copiedId ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-500" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Popover Actions */}
+                  <div className="space-y-0.5">
+                    <Link
+                      href="/settings"
+                      onClick={() => setIsProfileOpen(false)}
+                      className="w-full px-3 py-2 rounded-xl text-xs font-medium text-foreground hover:bg-secondary flex items-center gap-2.5 transition-colors"
+                    >
+                      <User className="w-4 h-4 text-muted-foreground" />
+                      <span>Account Settings</span>
+                    </Link>
+
+                    <Link
+                      href="/settings"
+                      onClick={() => setIsProfileOpen(false)}
+                      className="w-full px-3 py-2 rounded-xl text-xs font-medium text-foreground hover:bg-secondary flex items-center gap-2.5 transition-colors"
+                    >
+                      <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                      <span>Privacy &amp; End-to-End Encryption</span>
+                    </Link>
+
+                    <div className="h-px bg-border/60 my-1" />
+
+                    <button
+                      type="button"
+                      onClick={handleSignOut}
+                      className="w-full px-3 py-2 rounded-xl text-xs font-medium text-destructive hover:bg-destructive/10 flex items-center gap-2.5 transition-colors cursor-pointer"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
       </header>
 
-      {/* 2. Mobile Top Navigation Bar (Hidden when actively inside a mobile chat thread) */}
+      {/* 2. Mobile Top Navigation Bar (Hidden when actively in chat) */}
       {!isChatOpenOnMobile && (
-        <header className="md:hidden flex items-center justify-between px-4 py-3 bg-card/95 backdrop-blur-md border-b border-border/80 z-20 shrink-0 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <header className="md:hidden flex items-center justify-between px-4 h-14 bg-card/95 backdrop-blur-md border-b border-border/80 z-20 shrink-0 pt-[max(0rem,env(safe-area-inset-top))]">
           <Link href="/home" className="flex items-center gap-2">
             <Image
               src="/logo.png"
               alt="PlexoChat Logo"
-              width={28}
-              height={28}
-              className="w-7 h-7 object-contain"
+              width={26}
+              height={26}
+              className="w-6.5 h-6.5 object-contain"
             />
-            <span className="font-bold text-base tracking-tight text-foreground">
+            <span className="font-bold text-sm tracking-tight text-foreground">
               PlexoChat
             </span>
           </Link>
@@ -211,9 +387,14 @@ export function AppShell({ children }: AppShellProps) {
             <ThemeToggle />
             <Link
               href="/settings"
-              className="w-7 h-7 rounded-full bg-gradient-to-tr from-primary to-violet-500 text-white flex items-center justify-center font-bold text-xs"
+              className="relative p-0.5 rounded-full active:scale-95 transition-transform"
+              title="Settings"
             >
-              {user?.displayName ? user.displayName.substring(0, 1).toUpperCase() : "U"}
+              <UserAvatar
+                name={user?.displayName || "You"}
+                size="sm"
+                online={true}
+              />
             </Link>
           </div>
         </header>
@@ -224,9 +405,8 @@ export function AppShell({ children }: AppShellProps) {
         {children}
       </main>
 
-      {/* 4. Floating Liquid Glass Mobile Bottom Navigation */}
+      {/* 4. Mobile Bottom Navigation */}
       <FloatingBottomNav />
-
     </div>
   );
 }

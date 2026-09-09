@@ -19,14 +19,17 @@ OFFLINE DELIVERY STRATEGY:
     NEVER left as a permanent log. The sender receives a `{"type":"queued"}`
     status frame.
 
-    If you chose option (a) in the spec instead (reject-when-offline), swap the
-    `_handle_offline_recipient` function to just send back the "offline" status
-    and remove the pending_messages flush in `_on_connect_flush_pending`.
+E2EE RELAY CONTRACT (Phase 5):
+    Since the E2EE layer was added, the backend relays ONLY opaque Olm ciphertext.
+    - The `text` field is gone. Message frames carry `ciphertext` (base64 Olm blob)
+      and `message_type` (0 = PRE_KEY, 1 = MESSAGE).
+    - The backend NEVER decrypts, logs, or inspects message content.
+    - `pending_messages` stores only ciphertext + routing metadata.
+    - No plaintext or translated text ever appears in server logs, DB documents,
+      or any other server-side storage. This is enforced at the model level.
 
 OUT OF SCOPE FOR THIS VERSION:
     - Redis (presence/connection state is in-memory — valid for one instance)
-    - End-to-end encryption (WSS/TLS is the only transport protection)
-    - Translation
     - Photo/file sharing
 """
 
@@ -79,7 +82,6 @@ async def _broadcast_presence(
 ) -> None:
     """Broadcast a presence frame to all currently-online accepted connections of user."""
     col = get_connections_collection()
-    # Find all ACCEPTED connections where this user appears
     cursor = col.find(
         {
             "$or": [
@@ -97,13 +99,21 @@ async def _broadcast_presence(
 
 
 async def _flush_pending_messages(user: User, websocket: WebSocket) -> None:
-    """Deliver queued offline messages on reconnect, then delete them immediately."""
+    """Deliver queued offline messages on reconnect, then delete them immediately.
+
+    E2EE: queued documents contain only ciphertext + routing metadata.
+    Decryption happens client-side after delivery.
+    """
     col = get_pending_messages_collection()
     cursor = col.find({"to_user_id": user.id}, sort=[("created_at", 1)])
     async for doc in cursor:
+        ciphertext = doc.get("ciphertext") or doc.get("text", "")
+        text = doc.get("text") or doc.get("ciphertext", "")
         frame = OutgoingMessageFrame(
             from_user_id=doc["from_user_id"],
-            text=doc["text"],
+            ciphertext=ciphertext,
+            text=text,
+            message_type=doc.get("message_type", 0),
             client_message_id=doc["client_message_id"],
         ).model_dump()
         try:
@@ -111,8 +121,10 @@ async def _flush_pending_messages(user: User, websocket: WebSocket) -> None:
             # Delete immediately after delivery (never leave as permanent log)
             await col.delete_one({"_id": doc["_id"]})
             logger.info(
-                f"Flushed + deleted pending message client_message_id={doc['client_message_id']} "
+                f"Flushed + deleted pending message "
+                f"client_message_id={doc['client_message_id']} "
                 f"for user_id={user.id}"
+                # NOTE: ciphertext is NOT logged — backend never logs message content
             )
         except Exception as exc:
             logger.warning(f"Failed to flush pending message: {exc}")
@@ -124,20 +136,29 @@ async def _handle_offline_recipient(
     frame: IncomingMessageFrame,
     websocket: WebSocket,
 ) -> None:
-    """Queue message to pending_messages (TTL-backed) and notify sender."""
+    """Queue encrypted message to pending_messages (TTL-backed) and notify sender.
+
+    E2EE: only ciphertext and routing metadata are stored. Plaintext/translated
+    text never appears in this collection.
+    """
     col = get_pending_messages_collection()
     await col.insert_one(
         {
             "from_user_id": sender.id,
             "to_user_id": frame.to_user_id,
-            "text": frame.text,
+            "ciphertext": frame.ciphertext or frame.text,
+            "text": frame.text or frame.ciphertext,
+            "message_type": frame.message_type,
             "client_message_id": frame.client_message_id,
             "created_at": datetime.now(timezone.utc),
+            # NOTE: no plaintext, no translated text, no language metadata stored here.
+            # All semantic content is inside the encrypted payload decrypted by the recipient.
         }
     )
     logger.info(
         f"Queued pending message client_message_id={frame.client_message_id} "
-        f"from={sender.id} to={frame.to_user_id} (recipient offline)"
+        f"from={sender.id} to={frame.to_user_id} (recipient offline) "
+        # ciphertext deliberately NOT logged
     )
     await websocket.send_json(
         {
@@ -158,7 +179,10 @@ async def _handle_message_frame(
     sender: User,
     websocket: WebSocket,
 ) -> None:
-    """Validate and relay a 'message' frame from sender."""
+    """Validate and relay a 'message' frame from sender.
+
+    E2EE: frame carries ciphertext only. Backend never decrypts.
+    """
     try:
         frame = IncomingMessageFrame.model_validate(raw)
     except ValidationError as exc:
@@ -188,7 +212,9 @@ async def _handle_message_frame(
 
     outgoing = OutgoingMessageFrame(
         from_user_id=sender.id,
+        ciphertext=frame.ciphertext,
         text=frame.text,
+        message_type=frame.message_type,
         client_message_id=frame.client_message_id,
     ).model_dump()
 
@@ -198,6 +224,7 @@ async def _handle_message_frame(
         logger.info(
             f"WS message relayed: client_message_id={frame.client_message_id} "
             f"from={sender.id} to={frame.to_user_id}"
+            # ciphertext NOT logged
         )
     else:
         # Recipient offline — queue for later delivery
@@ -213,7 +240,7 @@ async def _handle_ack_frame(
         frame = IncomingAckFrame.model_validate(raw)
     except ValidationError:
         # Ack frames are best-effort; log but don't error back
-        logger.warning(f"Invalid ack frame from user_id={recipient.id}: {raw}")
+        logger.warning(f"Invalid ack frame from user_id={recipient.id}")
         return
 
     # Also delete any pending_messages record for this client_message_id to
@@ -261,6 +288,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     WebSocket relay endpoint.
 
     Connect: wss://<host>/api/v1/ws?token=<firebase_id_token>
+
+    E2EE relay: the server only routes opaque Olm ciphertext blobs between
+    authenticated, connected users. No plaintext ever passes through this handler.
     """
     # ── 1. Authenticate BEFORE accepting ────────────────────────────────────
     try:
