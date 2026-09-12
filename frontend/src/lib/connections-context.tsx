@@ -104,7 +104,7 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
       }
       const data = await res.json();
       const mappedConns: ConnectedFriend[] = (data || []).map((c: Record<string, unknown>) => {
-        const profile = (c.peer_profile || {}) as Record<string, string>;
+        const profile = (c.peer_profile || {}) as Record<string, any>;
         return {
           id: String(c.id || ""),
           userId: String(c.peer_user_id || ""),
@@ -114,11 +114,14 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
           countryFlag: "🌐",
           city: "",
           country: "",
-          languagesSpoken: [profile.preferred_receiving_language || "English"],
-          languagesLearning: [],
+          languagesSpoken: profile.spoken_languages?.length ? profile.spoken_languages : [profile.preferred_receiving_language || "English"],
+          languagesLearning: profile.learning_languages || [],
+          interests: profile.interests || [],
+          bio: profile.bio || "",
+          avatarUrl: profile.photo_url,
           chatId: String(c.id || ""),
           lastActive: "Connected",
-          online: true,
+          online: profile.online !== undefined ? profile.online : true,
           preferredReceivingLanguage: profile.preferred_receiving_language || "en",
         };
       });

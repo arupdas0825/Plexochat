@@ -41,6 +41,8 @@ def _recv(ws, expected_type: str = None):
         if expected_type:
             if frame.get("type") == expected_type:
                 return frame
+            if frame.get("type") == "error" and expected_type != "error":
+                return frame
         elif frame.get("type") != "presence":
             return frame
     return frame
@@ -171,7 +173,7 @@ async def test_ws_message_delivery_online(db_and_users):
             })
 
             # B should receive the message
-            frame = ws_b.receive_json()
+            frame = _recv(ws_b, expected_type="message")
             assert frame["type"] == "message", f"Expected 'message', got {frame}"
             assert frame["text"] == "Hello from pytest A!"
             assert frame["from_user_id"] == id_a
@@ -199,15 +201,13 @@ async def test_ws_ack_relayed_to_sender(db_and_users):
                 "text": "Ack test",
                 "client_message_id": client_msg_id,
             })
-            ws_b.receive_json()  # B receives
+            _recv(ws_b, expected_type="message")  # B receives
 
             # B acks
             ws_b.send_json({"type": "ack", "client_message_id": client_msg_id})
 
-            # A gets ack_relay (skipping presence frame if B's online event arrives first)
-            relay = ws_a.receive_json()
-            if relay.get("type") == "presence":
-                relay = ws_a.receive_json()
+            # A gets ack_relay (draining any presence frames)
+            relay = _recv(ws_a, expected_type="ack_relay")
             assert relay["type"] == "ack_relay", f"Expected 'ack_relay', got {relay}"
             assert relay["client_message_id"] == client_msg_id
 
@@ -231,7 +231,7 @@ async def test_ws_rejected_if_no_accepted_connection(db_and_users):
                 "client_message_id": "blocked_test",
             })
 
-            error_frame = ws_a.receive_json()
+            error_frame = _recv(ws_a, expected_type="error")
             assert error_frame["type"] == "error", f"Expected error frame, got {error_frame}"
             assert error_frame["code"] == "NOT_CONNECTED"
 
@@ -246,7 +246,7 @@ async def test_ws_invalid_frame_no_disconnect(db_and_users):
     with TestClient(app, raise_server_exceptions=False) as client:
         with client.websocket_connect(f"{WS_PATH}?token={_token(USER_A_UID)}") as ws_a:
             ws_a.send_text("not json at all!!")
-            err = ws_a.receive_json()
+            err = _recv(ws_a, expected_type="error")
             assert err["type"] == "error"
             assert err["code"] == "INVALID_JSON"
 
@@ -258,7 +258,7 @@ async def test_ws_invalid_frame_no_disconnect(db_and_users):
                 "client_message_id": "still_alive",
             })
             # Will get an error (NOT_CONNECTED or similar), not a disconnect
-            response = ws_a.receive_json()
+            response = _recv(ws_a, expected_type="error")
             assert response["type"] == "error"
 
     print("\n  ✓ test_ws_invalid_frame_no_disconnect passed")
@@ -354,4 +354,41 @@ async def test_ws_call_signal_peer_offline(db_and_users):
             assert resp["call_id"] == "call_offline"
 
     print("\n  ✓ test_ws_call_signal_peer_offline passed")
+
+
+@pytest.mark.asyncio(loop_scope="module")
+async def test_ws_read_relayed_to_sender(db_and_users):
+    """Read frame from recipient is relayed to sender as read_relay frame."""
+    id_a, id_b = db_and_users
+    await _ensure_connection(id_a, id_b, "ACCEPTED")
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        with client.websocket_connect(f"{WS_PATH}?token={_token(USER_A_UID)}") as ws_a, \
+             client.websocket_connect(f"{WS_PATH}?token={_token(USER_B_UID)}") as ws_b:
+
+            msg_id = f"read_test_{uuid.uuid4().hex[:8]}"
+
+            # A sends message to B
+            ws_a.send_json({
+                "type": "message",
+                "to_user_id": id_b,
+                "text": "Hello, read test!",
+                "client_message_id": msg_id,
+            })
+
+            delivered = _recv(ws_b, expected_type="message")
+            assert delivered["client_message_id"] == msg_id
+
+            # B sends read frame for this message
+            ws_b.send_json({
+                "type": "read",
+                "client_message_id": msg_id,
+            })
+
+            # A should receive read_relay
+            read_relay = _recv(ws_a, expected_type="read_relay")
+            assert read_relay["type"] == "read_relay"
+            assert read_relay["client_message_id"] == msg_id
+
+    print("\n  ✓ test_ws_read_relayed_to_sender passed")
 

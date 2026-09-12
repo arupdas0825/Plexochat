@@ -47,6 +47,11 @@ def get_device_keys_collection() -> AsyncIOMotorCollection:
     return get_database()["device_keys"]
 
 
+def get_conversation_preferences_collection() -> AsyncIOMotorCollection:
+    """Returns the `conversation_preferences` collection (user-specific per-peer settings)."""
+    return get_database()["conversation_preferences"]
+
+
 def get_collection(name: str) -> AsyncIOMotorCollection:
     """Returns a named collection from the active MongoDB database."""
     return get_database()[name]

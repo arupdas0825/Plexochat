@@ -22,6 +22,7 @@ import { DropdownMenu, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ChatThread } from "@/lib/mock-chat-data";
 import { useConnections } from "@/lib/connections-context";
+import { formatMessageTime } from "@/lib/utils";
 
 interface SidebarNavProps {
   threads: ChatThread[];
@@ -250,7 +251,7 @@ export function SidebarNav({
                       {isMuted && <BellOff className="w-3 h-3 text-muted-foreground opacity-70" />}
                     </span>
                     <span className="text-[10px] text-muted-foreground font-mono shrink-0">
-                      {thread.lastMessage?.timestamp || ""}
+                      {formatMessageTime(thread.lastMessage?.timestamp)}
                     </span>
                   </div>
 

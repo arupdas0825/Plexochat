@@ -16,11 +16,12 @@ from app.core.config import settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import logger, request_id_ctx
 from app.db.mongo import close_mongo_connection, connect_to_mongo, ping_mongo
-from app.db.collections import get_pending_messages_collection
+from app.db.collections import get_pending_messages_collection, get_conversation_preferences_collection
 from app.routers.auth import router as auth_router
 from app.routers.users import router as users_router
 from app.routers.connections import router as connections_router
 from app.routers.devices import router as devices_router
+from app.routers.conversations import router as conversations_router
 from app.api.v1.ws import router as ws_router
 from app.db.indexes import ensure_indexes
 
@@ -60,6 +61,18 @@ async def _ensure_device_keys_indexes() -> None:
     logger.info("device_keys indexes ensured.")
 
 
+async def _ensure_conversation_preferences_indexes() -> None:
+    """Creates unique compound index on conversation_preferences (user_id, peer_id)."""
+    col = get_conversation_preferences_collection()
+    await col.create_index(
+        [("user_id", ASCENDING), ("peer_id", ASCENDING)],
+        unique=True,
+        name="conv_pref_user_peer_unique",
+        background=True,
+    )
+    logger.info("conversation_preferences indexes ensured.")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan manager for database connections and background tasks."""
@@ -83,6 +96,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await _ensure_device_keys_indexes()
     except Exception as e:
         logger.warning(f"Could not ensure device_keys indexes: {e}")
+
+    # 2c. Ensure conversation_preferences indexes
+    try:
+        await _ensure_conversation_preferences_indexes()
+    except Exception as e:
+        logger.warning(f"Could not ensure conversation_preferences indexes: {e}")
 
     # 3. Ensure collection indexes and backfill user fields
     try:
@@ -164,6 +183,7 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
 app.include_router(connections_router, prefix="/api/v1")
 app.include_router(devices_router, prefix="/api/v1")
+app.include_router(conversations_router, prefix="/api/v1")
 app.include_router(ws_router, prefix="/api/v1")
 
 

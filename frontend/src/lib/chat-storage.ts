@@ -215,3 +215,73 @@ export async function getUserThreads(userId: string): Promise<ChatThread[] | nul
     return null;
   }
 }
+
+export async function clearThreadMessages(threadId: string): Promise<void> {
+  try {
+    const db = await getDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("messages", "readwrite");
+      const store = tx.objectStore("messages");
+      const index = store.index("threadId");
+      const req = index.openKeyCursor(IDBKeyRange.only(threadId));
+      req.onsuccess = (e) => {
+        const cursor = (e.target as IDBRequest<IDBCursor>).result;
+        if (cursor) {
+          store.delete(cursor.primaryKey);
+          cursor.continue();
+        } else {
+          resolve();
+        }
+      };
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.warn("[ChatStorage] Error clearing messages for thread:", threadId, err);
+  }
+}
+
+export async function deleteThreadFromStorage(userId: string, threadId: string): Promise<void> {
+  await clearThreadMessages(threadId);
+  try {
+    const existing = await getUserThreads(userId);
+    if (existing) {
+      const filtered = existing.filter((t) => t.id !== threadId);
+      await saveUserThreads(userId, filtered);
+    }
+  } catch (err) {
+    console.warn("[ChatStorage] Error deleting thread from storage:", threadId, err);
+  }
+}
+
+export async function purgeExpiredMessages(threadId: string, ttlSeconds: number): Promise<number> {
+  if (!ttlSeconds || ttlSeconds <= 0) return 0;
+  const cutoffTime = Date.now() - ttlSeconds * 1000;
+  let purgedCount = 0;
+  try {
+    const db = await getDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("messages", "readwrite");
+      const store = tx.objectStore("messages");
+      const index = store.index("threadId");
+      const req = index.openCursor(IDBKeyRange.only(threadId));
+      req.onsuccess = (e) => {
+        const cursor = (e.target as IDBRequest<IDBCursorWithValue>).result;
+        if (cursor) {
+          const record = cursor.value;
+          const msgTimestamp = new Date(record.message.timestamp).getTime();
+          if (msgTimestamp < cutoffTime) {
+            cursor.delete();
+            purgedCount++;
+          }
+          cursor.continue();
+        } else {
+          resolve(purgedCount);
+        }
+      };
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.warn("[ChatStorage] Error purging expired messages for thread:", threadId, err);
+    return 0;
+  }
+}

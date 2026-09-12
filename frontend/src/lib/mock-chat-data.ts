@@ -12,6 +12,11 @@ export interface ChatUser {
   preferredLanguage: string;
   languageCode?: string;
   online: boolean;
+  bio?: string;
+  spokenLanguages?: string[];
+  learningLanguages?: string[];
+  interests?: string[];
+  photoUrl?: string;
 }
 
 export interface ChatMessage {
@@ -35,6 +40,9 @@ export interface ChatThread {
   lastMessage: ChatMessage;
   unreadCount: number;
   messages: ChatMessage[];
+  muted?: boolean;
+  favorite?: boolean;
+  disappearingTtl?: number | null;
 }
 
 export interface ConnectionRequest {

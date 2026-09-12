@@ -9,7 +9,7 @@ import React, {
   useCallback,
 } from "react";
 import { ChatThread, ChatMessage, ChatUser } from "./mock-chat-data";
-import { useAuth, getWebSocketUrl } from "./auth-context";
+import { useAuth, getWebSocketUrl, getBackendUrl } from "./auth-context";
 import { useConnections } from "./connections-context";
 import {
   translateText,
@@ -28,6 +28,9 @@ import {
   getThreadMessages,
   saveUserThreads,
   getUserThreads,
+  clearThreadMessages,
+  deleteThreadFromStorage,
+  purgeExpiredMessages,
 } from "./chat-storage";
 
 interface ChatContextType {
@@ -42,6 +45,14 @@ interface ChatContextType {
     photoUrl?: string
   ) => Promise<void>;
   startChatWithUser: (user: ChatUser, initialText?: string) => string;
+  markMessagesAsRead: (threadId: string, messageIds: string[]) => void;
+  clearChat: (threadId: string) => Promise<void>;
+  deleteChat: (threadId: string) => Promise<void>;
+  updateThreadPreferences: (
+    threadId: string,
+    prefs: { muted?: boolean; favorite?: boolean; disappearing_ttl?: number | null }
+  ) => Promise<void>;
+  refreshPeerProfile: (userId: string) => Promise<ChatUser | null>;
   sendWsFrame: (frame: Record<string, unknown>) => boolean;
   registerCallSignalHandler: (handler: (signal: any) => void) => () => void;
 }
@@ -180,6 +191,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           preferredLanguage: conn.languagesSpoken?.[0] || "English",
           languageCode: conn.preferredReceivingLanguage || "en",
           online: conn.online,
+          bio: conn.bio,
+          spokenLanguages: conn.languagesSpoken,
+          learningLanguages: conn.languagesLearning,
+          interests: conn.interests,
+          photoUrl: conn.avatarUrl,
         };
 
         if (foundIdx === -1) {
@@ -390,6 +406,20 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                     client_message_id: data.client_message_id,
                   })
                 );
+
+                // If this thread is actively open and page is visible, also send read receipt immediately
+                if (
+                  threadId === activeThreadIdRef.current &&
+                  typeof document !== "undefined" &&
+                  document.visibilityState === "visible"
+                ) {
+                  socket.send(
+                    JSON.stringify({
+                      type: "read",
+                      client_message_id: data.client_message_id,
+                    })
+                  );
+                }
               }
             } else if (data.type === "ack_relay" || data.type === "delivered") {
               const ackId = data.client_message_id;
@@ -397,13 +427,48 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                 prev.map((th) => ({
                   ...th,
                   messages: th.messages.map((m) =>
-                    m.id === ackId ? { ...m, status: "delivered" } : m
+                    m.id === ackId && m.status !== "read" ? { ...m, status: "delivered" } : m
                   ),
                   lastMessage:
-                    th.lastMessage?.id === ackId
+                    th.lastMessage?.id === ackId && th.lastMessage.status !== "read"
                       ? { ...th.lastMessage, status: "delivered" }
                       : th.lastMessage,
                 }))
+              );
+            } else if (data.type === "read_relay") {
+              const readIds = new Set<string>();
+              if (data.client_message_id) readIds.add(data.client_message_id);
+              if (Array.isArray(data.client_message_ids)) {
+                data.client_message_ids.forEach((id: string) => {
+                  if (typeof id === "string" && id) readIds.add(id);
+                });
+              }
+
+              setThreads((prev) =>
+                prev.map((th) => {
+                  let changed = false;
+                  const updatedMsgs = th.messages.map((m) => {
+                    if (readIds.has(m.id) && m.status !== "read") {
+                      changed = true;
+                      const readMsg = { ...m, status: "read" as const };
+                      saveMessage(th.id, readMsg).catch(() => {});
+                      return readMsg;
+                    }
+                    return m;
+                  });
+
+                  const updatedLast =
+                    th.lastMessage && readIds.has(th.lastMessage.id)
+                      ? { ...th.lastMessage, status: "read" as const }
+                      : th.lastMessage;
+
+                  if (!changed && updatedLast === th.lastMessage) return th;
+                  return {
+                    ...th,
+                    messages: updatedMsgs,
+                    lastMessage: updatedLast,
+                  };
+                })
               );
             } else if (data.type === "queued") {
               const queuedId = data.client_message_id;
@@ -499,6 +564,47 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     0
   );
 
+  const fetchThreadPreferences = useCallback(
+    async (peerId: string, threadId: string) => {
+      if (!firebaseUser) return;
+      try {
+        const token = await firebaseUser.getIdToken();
+        const res = await fetch(
+          `${getBackendUrl()}/api/v1/conversations/${peerId}/preferences`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setThreads((prev) =>
+            prev.map((t) => {
+              if (t.id === threadId) {
+                return {
+                  ...t,
+                  muted: data.muted ?? false,
+                  favorite: data.favorite ?? false,
+                  disappearingTtl: data.disappearing_ttl ?? null,
+                };
+              }
+              return t;
+            })
+          );
+          if (data.disappearing_ttl) {
+            await purgeExpiredMessages(threadId, data.disappearing_ttl);
+            const stored = await getThreadMessages(threadId);
+            setThreads((prev) =>
+              prev.map((t) => (t.id === threadId ? { ...t, messages: stored } : t))
+            );
+          }
+        }
+      } catch (err) {
+        console.warn("[ChatContext] Failed to fetch conversation preferences:", err);
+      }
+    },
+    [firebaseUser]
+  );
+
   const selectThread = (id: string | null) => {
     setActiveThreadId(id);
     if (id) {
@@ -506,6 +612,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         th.id === id ? { ...th, unreadCount: 0 } : th
       );
       saveThreads(updated);
+      const target = updated.find((t) => t.id === id);
+      if (target?.participant?.id) {
+        fetchThreadPreferences(target.participant.id, id);
+      }
     }
   };
 
@@ -711,6 +821,166 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     return newId;
   };
 
+  const markMessagesAsRead = useCallback((threadId: string, messageIds: string[]) => {
+    if (!messageIds || messageIds.length === 0) return;
+
+    // Send "read" frame to WebSocket relay so sender receives read_relay
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      try {
+        wsRef.current.send(
+          JSON.stringify({
+            type: "read",
+            client_message_ids: messageIds,
+          })
+        );
+      } catch (err) {
+        console.warn("[PlexoChat WS] Failed to send read frame:", err);
+      }
+    }
+
+    // Reset unread count for this thread locally
+    setThreads((prev) =>
+      prev.map((th) => {
+        if (th.id === threadId && th.unreadCount > 0) {
+          return { ...th, unreadCount: 0 };
+        }
+        return th;
+      })
+    );
+  }, []);
+
+  const clearChat = useCallback(
+    async (threadId: string) => {
+      await clearThreadMessages(threadId);
+      setThreads((prev) => {
+        const updated = prev.map((t) => {
+          if (t.id === threadId) {
+            return {
+              ...t,
+              messages: [],
+              unreadCount: 0,
+            };
+          }
+          return t;
+        });
+        if (user?.id) {
+          saveUserThreads(user.id, updated);
+        }
+        return updated;
+      });
+    },
+    [user?.id]
+  );
+
+  const deleteChat = useCallback(
+    async (threadId: string) => {
+      if (user?.id) {
+        await deleteThreadFromStorage(user.id, threadId);
+      }
+      setThreads((prev) => {
+        const filtered = prev.filter((t) => t.id !== threadId);
+        if (user?.id) {
+          saveUserThreads(user.id, filtered);
+        }
+        return filtered;
+      });
+      if (activeThreadId === threadId) {
+        setActiveThreadId(null);
+      }
+    },
+    [user?.id, activeThreadId]
+  );
+
+  const updateThreadPreferences = useCallback(
+    async (
+      threadId: string,
+      prefs: { muted?: boolean; favorite?: boolean; disappearing_ttl?: number | null }
+    ) => {
+      const target = threads.find((t) => t.id === threadId);
+      if (!target) return;
+      const peerId = target.participant.id;
+
+      // Update locally immediately
+      setThreads((prev) => {
+        const updated = prev.map((t) => {
+          if (t.id === threadId) {
+            return {
+              ...t,
+              muted: prefs.muted !== undefined ? prefs.muted : t.muted,
+              favorite: prefs.favorite !== undefined ? prefs.favorite : t.favorite,
+              disappearingTtl:
+                prefs.disappearing_ttl !== undefined ? prefs.disappearing_ttl : t.disappearingTtl,
+            };
+          }
+          return t;
+        });
+        if (user?.id) {
+          saveUserThreads(user.id, updated);
+        }
+        return updated;
+      });
+
+      if (!firebaseUser) return;
+      try {
+        const token = await firebaseUser.getIdToken();
+        await fetch(`${getBackendUrl()}/api/v1/conversations/${peerId}/preferences`, {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(prefs),
+        });
+      } catch (err) {
+        console.warn("[ChatContext] Failed to patch conversation preferences:", err);
+      }
+    },
+    [threads, user?.id, firebaseUser]
+  );
+
+  const refreshPeerProfile = useCallback(
+    async (userId: string): Promise<ChatUser | null> => {
+      if (!firebaseUser) return null;
+      try {
+        const token = await firebaseUser.getIdToken();
+        const res = await fetch(`${getBackendUrl()}/api/v1/users/${userId}/profile`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        const updatedUser: ChatUser = {
+          id: data.id,
+          username: data.username,
+          displayName: data.display_name,
+          plexoChatId: data.plexochat_id?.startsWith("@") ? data.plexochat_id : `@${data.plexochat_id}`,
+          avatarBg: "from-blue-600 to-indigo-600",
+          preferredLanguage: data.spoken_languages?.[0] || data.preferred_receiving_language || "English",
+          languageCode: data.preferred_receiving_language || "en",
+          online: data.online ?? true,
+          bio: data.bio || "",
+          spokenLanguages: data.spoken_languages || [],
+          learningLanguages: data.learning_languages || [],
+          interests: data.interests || [],
+          photoUrl: data.photo_url || undefined,
+        };
+
+        setThreads((prev) =>
+          prev.map((t) => {
+            if (t.participant.id === userId || t.participant.username === data.username) {
+              return { ...t, participant: { ...t.participant, ...updatedUser } };
+            }
+            return t;
+          })
+        );
+        return updatedUser;
+      } catch (err) {
+        console.warn("[ChatContext] Failed to refresh peer profile:", err);
+        return null;
+      }
+    },
+    [firebaseUser]
+  );
+
   return (
     <ChatContext.Provider
       value={{
@@ -720,6 +990,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         selectThread,
         sendMessage,
         startChatWithUser,
+        markMessagesAsRead,
+        clearChat,
+        deleteChat,
+        updateThreadPreferences,
+        refreshPeerProfile,
         sendWsFrame,
         registerCallSignalHandler,
       }}
@@ -727,6 +1002,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       {children}
     </ChatContext.Provider>
   );
+
 }
 
 export function useChat() {

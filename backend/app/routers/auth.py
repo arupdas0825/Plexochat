@@ -36,6 +36,10 @@ class SyncResponse(BaseModel):
     photo_url: Optional[str] = None
     email_verified: bool = False
     preferred_receiving_language: str = "en"
+    bio: Optional[str] = None
+    spoken_languages: list[str] = []
+    learning_languages: list[str] = []
+    interests: list[str] = []
     created_at: datetime
     updated_at: datetime
     is_new_user: bool
@@ -213,6 +217,10 @@ async def sync_firebase_user(
         photo_url=result.get("photo_url"),
         email_verified=result.get("email_verified", False),
         preferred_receiving_language=result.get("preferred_receiving_language", "en"),
+        bio=result.get("bio"),
+        spoken_languages=result.get("spoken_languages") or [],
+        learning_languages=result.get("learning_languages") or [],
+        interests=result.get("interests") or [],
         created_at=result["created_at"],
         updated_at=result["updated_at"],
         is_new_user=is_new_user,

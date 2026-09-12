@@ -259,6 +259,10 @@ interface BackendSyncResponse {
   display_name?: string;
   photo_url?: string;
   preferred_receiving_language?: string;
+  bio?: string;
+  spoken_languages?: string[];
+  learning_languages?: string[];
+  interests?: string[];
 }
 
 /**
@@ -437,6 +441,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 updated.preferredReceivingLanguage !== syncData.preferred_receiving_language
               ) {
                 updated.preferredReceivingLanguage = syncData.preferred_receiving_language;
+                changed = true;
+              }
+              if (syncData.bio !== undefined && updated.bio !== syncData.bio) {
+                updated.bio = syncData.bio || "";
+                changed = true;
+              }
+              if (syncData.spoken_languages && syncData.spoken_languages.length > 0) {
+                updated.languagesSpoken = syncData.spoken_languages;
+                changed = true;
+              }
+              if (syncData.learning_languages && syncData.learning_languages.length > 0) {
+                updated.languagesLearning = syncData.learning_languages;
+                changed = true;
+              }
+              if (syncData.interests && syncData.interests.length > 0) {
+                updated.interests = syncData.interests;
                 changed = true;
               }
 
@@ -624,11 +644,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Sync with MongoDB backend
       try {
         const token = await auth.currentUser.getIdToken();
-        const patchBody: Record<string, string> = {};
-        if (partial.displayName) patchBody.display_name = partial.displayName;
-        if (partial.preferredReceivingLanguage) {
+        const patchBody: Record<string, any> = {};
+        if (partial.displayName !== undefined) patchBody.display_name = partial.displayName;
+        if (partial.preferredReceivingLanguage !== undefined) {
           patchBody.preferred_receiving_language = partial.preferredReceivingLanguage;
         }
+        if (partial.bio !== undefined) patchBody.bio = partial.bio;
+        if (partial.languagesSpoken !== undefined) patchBody.spoken_languages = partial.languagesSpoken;
+        if (partial.languagesLearning !== undefined) patchBody.learning_languages = partial.languagesLearning;
+        if (partial.interests !== undefined) patchBody.interests = partial.interests;
 
         if (Object.keys(patchBody).length > 0) {
           const res = await fetch(`${getBackendUrl()}/api/v1/users/me`, {

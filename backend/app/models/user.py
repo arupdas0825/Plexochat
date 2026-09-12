@@ -27,6 +27,10 @@ class UserBase(BaseModel):
     plexochat_id: str = Field(..., min_length=3, max_length=30, pattern=r"^[a-zA-Z0-9_.-]{3,30}$")
     display_name: str = Field(..., min_length=1, max_length=50)
     preferred_receiving_language: str = Field(default="en", min_length=2, max_length=10)
+    bio: Optional[str] = Field(None, max_length=250)
+    spoken_languages: list[str] = Field(default_factory=list, max_length=15)
+    learning_languages: list[str] = Field(default_factory=list, max_length=15)
+    interests: list[str] = Field(default_factory=list, max_length=20)
 
     @field_validator("username")
     @classmethod
@@ -68,6 +72,10 @@ class UserUpdate(BaseModel):
     """Payload for updating user profile fields."""
     display_name: Optional[str] = Field(None, min_length=1, max_length=50)
     preferred_receiving_language: Optional[str] = Field(None, min_length=2, max_length=10)
+    bio: Optional[str] = Field(None, max_length=250)
+    spoken_languages: Optional[list[str]] = Field(None, max_length=15)
+    learning_languages: Optional[list[str]] = Field(None, max_length=15)
+    interests: Optional[list[str]] = Field(None, max_length=20)
 
     @field_validator("display_name")
     @classmethod
@@ -87,6 +95,10 @@ class UserPublic(BaseModel):
     plexochat_id: str
     display_name: str
     preferred_receiving_language: str
+    bio: Optional[str] = None
+    spoken_languages: list[str] = Field(default_factory=list)
+    learning_languages: list[str] = Field(default_factory=list)
+    interests: list[str] = Field(default_factory=list)
 
 
 class User(UserBase):
@@ -108,4 +120,8 @@ class User(UserBase):
             plexochat_id=self.plexochat_id,
             display_name=self.display_name,
             preferred_receiving_language=self.preferred_receiving_language,
+            bio=self.bio,
+            spoken_languages=self.spoken_languages or [],
+            learning_languages=self.learning_languages or [],
+            interests=self.interests or [],
         )

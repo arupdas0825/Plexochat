@@ -19,6 +19,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useAuth } from "@/lib/auth-context";
 import { useConnections } from "@/lib/connections-context";
 import { useChat } from "@/lib/chat-context";
+import { formatMessageTime } from "@/lib/utils";
 
 export function HomeDashboard() {
   const router = useRouter();
@@ -220,7 +221,7 @@ export function HomeDashboard() {
                         {p.displayName}
                       </span>
                       <span className="text-[10px] text-muted-foreground font-mono shrink-0">
-                        {chat.lastMessage?.timestamp || ""}
+                        {formatMessageTime(chat.lastMessage?.timestamp)}
                       </span>
                     </div>
 

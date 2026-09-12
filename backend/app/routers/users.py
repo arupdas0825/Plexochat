@@ -166,6 +166,10 @@ async def search_users(
                 preferred_receiving_language=doc.get("preferred_receiving_language", "en"),
                 relationship_status=rel_status,
                 connection_request_id=req_id,
+                bio=doc.get("bio"),
+                spoken_languages=doc.get("spoken_languages") or [],
+                learning_languages=doc.get("learning_languages") or [],
+                interests=doc.get("interests") or [],
             )
         )
 
@@ -213,23 +217,27 @@ async def get_user_profile(
         preferred_receiving_language=target_doc.get("preferred_receiving_language", "en"),
         relationship_status=rel_status,
         connection_request_id=req_id,
+        bio=target_doc.get("bio"),
+        spoken_languages=target_doc.get("spoken_languages") or [],
+        learning_languages=target_doc.get("learning_languages") or [],
+        interests=target_doc.get("interests") or [],
     )
 
 
 @router.patch(
     "/me",
-    summary="Update own profile (language / display name)",
+    summary="Update own profile (language / display name / bio / languages / interests)",
     description=(
-        "Allows the authenticated user to update their preferred_receiving_language "
-        "and/or display_name. Language code is strictly validated against the "
-        "supported enum — any unrecognised code is rejected with 422."
+        "Allows the authenticated user to update their preferred_receiving_language, "
+        "display_name, bio, spoken_languages, learning_languages, and interests. "
+        "Language code is strictly validated against the supported enum."
     ),
 )
 async def update_own_profile(
     payload: UserUpdate,
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    """Persist profile updates (language, display name) for the authenticated user."""
+    """Persist profile updates for the authenticated user."""
     await rate_limiter.check(f"profile_update:{current_user.id}", max_requests=30, window_seconds=60)
 
     update_fields: dict = {"updated_at": datetime.now(timezone.utc)}
@@ -237,6 +245,14 @@ async def update_own_profile(
         update_fields["preferred_receiving_language"] = payload.preferred_receiving_language
     if payload.display_name is not None:
         update_fields["display_name"] = payload.display_name
+    if payload.bio is not None:
+        update_fields["bio"] = payload.bio
+    if payload.spoken_languages is not None:
+        update_fields["spoken_languages"] = payload.spoken_languages
+    if payload.learning_languages is not None:
+        update_fields["learning_languages"] = payload.learning_languages
+    if payload.interests is not None:
+        update_fields["interests"] = payload.interests
 
     if len(update_fields) == 1:  # only updated_at — nothing to do
         return {"status": "ok", "message": "No changes provided."}
@@ -257,5 +273,9 @@ async def update_own_profile(
             "preferred_receiving_language", current_user.preferred_receiving_language
         ),
         "display_name": update_fields.get("display_name", current_user.display_name),
+        "bio": update_fields.get("bio", current_user.bio),
+        "spoken_languages": update_fields.get("spoken_languages", current_user.spoken_languages),
+        "learning_languages": update_fields.get("learning_languages", current_user.learning_languages),
+        "interests": update_fields.get("interests", current_user.interests),
         "updated_fields": [k for k in update_fields if k != "updated_at"],
     }

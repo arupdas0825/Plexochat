@@ -6,6 +6,7 @@ import { OnlineIndicator } from "./online-indicator";
 export interface UserAvatarProps {
   name: string;
   avatarBg?: string;
+  photoUrl?: string;
   size?: "xs" | "sm" | "md" | "lg" | "xl";
   online?: boolean;
   className?: string;
@@ -30,6 +31,7 @@ const indicatorSizeMap: Record<string, "sm" | "md" | "lg"> = {
 export function UserAvatar({
   name,
   avatarBg = "from-primary to-violet-600",
+  photoUrl,
   size = "md",
   online,
   className = "",
@@ -48,9 +50,13 @@ export function UserAvatar({
   return (
     <div className={`relative shrink-0 select-none ${className}`}>
       <div
-        className={`${sizeMap[size]} rounded-full ${bgGradient} text-white font-bold flex items-center justify-center shadow-xs ring-1 ring-black/5 dark:ring-white/10`}
+        className={`${sizeMap[size]} rounded-full ${photoUrl ? "bg-muted" : bgGradient} text-white font-bold flex items-center justify-center shadow-xs ring-1 ring-black/5 dark:ring-white/10 overflow-hidden`}
       >
-        <span>{initials}</span>
+        {photoUrl ? (
+          <img src={photoUrl} alt={name} className="w-full h-full object-cover" />
+        ) : (
+          <span>{initials}</span>
+        )}
       </div>
       {typeof online === "boolean" && (
         <div className="absolute bottom-0 right-0 translate-x-[10%] translate-y-[10%]">

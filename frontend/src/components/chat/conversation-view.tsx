@@ -33,6 +33,9 @@ import { DropdownMenu, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { ChatThread, ChatMessage } from "@/lib/mock-chat-data";
 import { useVisualViewport } from "@/lib/use-visual-viewport";
 import { useCall } from "@/lib/call-context";
+import { useChat } from "@/lib/chat-context";
+import { formatMessageTime } from "@/lib/utils";
+import { ChatInfoPanel } from "./chat-info-panel";
 
 interface ConversationViewProps {
   thread: ChatThread;
@@ -53,6 +56,7 @@ export function ConversationView({
   const [extraMessages, setExtraMessages] = useState<ChatMessage[]>([]);
   const [isSecurityOpen, setIsSecurityOpen] = useState(false);
   const [autoTranslateEnabled, setAutoTranslateEnabled] = useState(true);
+  const [isInfoOpen, setIsInfoOpen] = useState(false);
 
   const securityRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -63,11 +67,87 @@ export function ConversationView({
   const participant = thread.participant;
 
   const { startCall, callState } = useCall();
+  const { markMessagesAsRead, clearChat } = useChat();
   const isCallActive = callState !== "IDLE";
 
   const allMessages = React.useMemo(() => {
     return [...thread.messages, ...extraMessages].filter((m) => !deletedMsgIds[m.id]);
   }, [thread.messages, extraMessages, deletedMsgIds]);
+
+  // Viewport IntersectionObserver: Batch mark incoming messages as read when viewed
+  const reportedReadIdsRef = useRef<Set<string>>(new Set());
+  const readBatchQueueRef = useRef<Set<string>>(new Set());
+  const readDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const flushReadBatch = useCallback(() => {
+    if (readBatchQueueRef.current.size === 0) return;
+    if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+
+    const idsToMark = Array.from(readBatchQueueRef.current);
+    readBatchQueueRef.current.clear();
+    markMessagesAsRead(thread.id, idsToMark);
+  }, [markMessagesAsRead, thread.id]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("IntersectionObserver" in window)) {
+      return;
+    }
+
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        let hasNew = false;
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.25) {
+            const msgId = entry.target.getAttribute("data-message-id");
+            const senderId = entry.target.getAttribute("data-sender-id");
+            if (msgId && senderId !== "me" && !reportedReadIdsRef.current.has(msgId)) {
+              reportedReadIdsRef.current.add(msgId);
+              readBatchQueueRef.current.add(msgId);
+              hasNew = true;
+            }
+          }
+        });
+
+        if (hasNew) {
+          if (readDebounceTimerRef.current) clearTimeout(readDebounceTimerRef.current);
+          readDebounceTimerRef.current = setTimeout(() => {
+            flushReadBatch();
+          }, 150);
+        }
+      },
+      {
+        root: container,
+        threshold: [0.25, 0.5],
+      }
+    );
+
+    const messageElements = container.querySelectorAll("[data-message-id]");
+    messageElements.forEach((el) => {
+      const msgId = el.getAttribute("data-message-id");
+      const senderId = el.getAttribute("data-sender-id");
+      if (msgId && senderId !== "me" && !reportedReadIdsRef.current.has(msgId)) {
+        observer.observe(el);
+      }
+    });
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        flushReadBatch();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleVisibilityChange);
+
+    return () => {
+      observer.disconnect();
+      if (readDebounceTimerRef.current) clearTimeout(readDebounceTimerRef.current);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleVisibilityChange);
+    };
+  }, [allMessages, flushReadBatch]);
 
   // Click outside for security popover
   useEffect(() => {
@@ -171,6 +251,12 @@ export function ConversationView({
   // Header options menu items
   const headerMenuItems: DropdownMenuItem[] = [
     {
+      id: "contact-info",
+      label: "Contact info",
+      icon: Info,
+      onClick: () => setIsInfoOpen(true),
+    },
+    {
       id: "toggle-translation",
       label: autoTranslateEnabled ? "Pause auto-translate" : "Enable auto-translate",
       icon: Globe2,
@@ -181,9 +267,12 @@ export function ConversationView({
       label: "Clear conversation",
       icon: Trash2,
       destructive: true,
-      onClick: () => {
-        const confirmed = window.confirm("Clear visible messages in this chat?");
+      onClick: async () => {
+        const confirmed = window.confirm(
+          `This clears your local copy of this conversation on this device. It does not affect ${participant.displayName}'s copy.`
+        );
         if (confirmed) {
+          await clearChat(thread.id);
           const allIds = allMessages.reduce((acc, m) => ({ ...acc, [m.id]: true }), {});
           setDeletedMsgIds(allIds);
         }
@@ -192,9 +281,10 @@ export function ConversationView({
   ];
 
   return (
-    <div className="flex-1 h-full flex flex-col bg-background relative overflow-hidden">
-      {/* 1. Header (Fix Problem 5: simplified, clean information hierarchy) */}
-      <header className="h-14 px-3.5 sm:px-5 border-b border-border/70 bg-card/95 backdrop-blur-md flex items-center justify-between z-10 shrink-0 select-none pt-[max(0rem,env(safe-area-inset-top))]">
+    <div className="flex-1 h-full flex flex-row bg-background relative overflow-hidden">
+      <div className="flex-1 h-full flex flex-col min-w-0 relative overflow-hidden">
+        {/* 1. Header (Fix Problem 5: simplified, clean information hierarchy) */}
+        <header className="h-14 px-3.5 sm:px-5 border-b border-border/70 bg-card/95 backdrop-blur-md flex items-center justify-between z-10 shrink-0 select-none pt-[max(0rem,env(safe-area-inset-top))]">
         <div className="flex items-center gap-2.5 min-w-0">
           {/* Mobile Back Button */}
           <button
@@ -206,71 +296,91 @@ export function ConversationView({
             <ArrowLeft className="w-5 h-5" />
           </button>
 
-          {/* Participant Avatar */}
-          <UserAvatar
-            name={participant.displayName}
-            avatarBg={participant.avatarBg}
-            size="md"
-            online={participant.online}
-          />
+          {/* Participant Avatar & Name (Click to open Chat Info) */}
+          <div
+            onClick={() => setIsInfoOpen(true)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setIsInfoOpen(true);
+              }
+            }}
+            className="flex items-center gap-2.5 min-w-0 cursor-pointer hover:opacity-85 transition-opacity"
+            title={`View ${participant.displayName}'s info`}
+          >
+            <UserAvatar
+              name={participant.displayName}
+              avatarBg={participant.avatarBg}
+              photoUrl={participant.photoUrl}
+              size="md"
+              online={participant.online}
+            />
 
-          {/* Participant Details */}
-          <div className="flex flex-col text-left min-w-0 leading-tight">
-            <div className="flex items-center gap-1.5 truncate">
-              <span className="font-bold text-xs sm:text-sm text-foreground truncate">
-                {participant.displayName}
-              </span>
-            </div>
+            {/* Participant Details */}
+            <div className="flex flex-col text-left min-w-0 leading-tight">
+              <div className="flex items-center gap-1.5 truncate">
+                <span className="font-bold text-xs sm:text-sm text-foreground truncate">
+                  {participant.displayName}
+                </span>
+              </div>
 
-            <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground font-mono">
-              <span className="flex items-center gap-1">
-                <span
-                  className={`w-1.5 h-1.5 rounded-full ${
-                    participant.online ? "bg-emerald-500" : "bg-muted-foreground/50"
-                  }`}
-                />
-                <span>{participant.online ? "Online" : "Offline"}</span>
-              </span>
+              <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground font-mono">
+                <span className="flex items-center gap-1">
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      participant.online ? "bg-emerald-500" : "bg-muted-foreground/50"
+                    }`}
+                  />
+                  <span>{participant.online ? "Online" : "Offline"}</span>
+                </span>
 
-              <span className="text-muted-foreground/40">•</span>
+                <span className="text-muted-foreground/40">•</span>
 
-              {/* Security info popover trigger */}
-              <div ref={securityRef} className="relative inline-block">
-                <button
-                  type="button"
-                  onClick={() => setIsSecurityOpen((prev) => !prev)}
-                  className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                  title="View encryption details"
+                {/* Security info popover trigger */}
+                <div
+                  ref={securityRef}
+                  className="relative inline-block"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  <Lock className="w-2.5 h-2.5 text-emerald-500" />
-                  <span>E2EE</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsSecurityOpen((prev) => !prev)}
+                    className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                    title="View encryption details"
+                  >
+                    <Lock className="w-2.5 h-2.5 text-emerald-500" />
+                    <span>E2EE</span>
+                  </button>
 
-                <AnimatePresence>
-                  {isSecurityOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95, y: 4 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.95, y: 4 }}
-                      className="absolute left-0 mt-2 w-72 p-3 rounded-2xl bg-card border border-border shadow-xl z-50 text-left text-xs space-y-1.5 select-text"
-                    >
-                      <div className="flex items-center gap-1.5 font-bold text-foreground">
-                        <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                        <span>End-to-End Encrypted</span>
-                      </div>
-                      <p className="text-muted-foreground text-[11px] leading-relaxed">
-                        Messages and media in this chat are encrypted client-side via the Olm Double-Ratchet protocol. Only your device and {participant.displayName}&apos;s device have the decryption keys.
-                      </p>
-                      <div className="pt-1 text-[10px] text-muted-foreground font-mono">
-                        Target Language: {participant.preferredLanguage || "Direct"}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                  <AnimatePresence>
+                    {isSecurityOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: 4 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: 4 }}
+                        className="absolute left-0 mt-2 w-72 p-3 rounded-2xl bg-card border border-border shadow-xl z-50 text-left text-xs space-y-1.5 select-text"
+                      >
+                        <div className="flex items-center gap-1.5 font-bold text-foreground">
+                          <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                          <span>End-to-End Encrypted</span>
+                        </div>
+                        <p className="text-muted-foreground text-[11px] leading-relaxed">
+                          Messages and media in this chat are encrypted client-side via the Olm Double-Ratchet protocol. Only your device and {participant.displayName}&apos;s device have the decryption keys.
+                        </p>
+                        <div className="pt-1 text-[10px] text-muted-foreground font-mono">
+                          Target Language: {participant.preferredLanguage || "Direct"}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
             </div>
           </div>
         </div>
+
 
         {/* Right Header Actions */}
         <div className="flex items-center gap-1.5 shrink-0">
@@ -386,6 +496,8 @@ export function ConversationView({
           return (
             <div
               key={msg.id}
+              data-message-id={msg.id}
+              data-sender-id={msg.senderId}
               className={`flex flex-col group/row ${isMe ? "items-end" : "items-start"}`}
             >
               <div className="flex items-center gap-1.5 max-w-[85%] sm:max-w-[70%]">
@@ -432,22 +544,25 @@ export function ConversationView({
                     )}
 
                     <span className="font-mono text-[9px]">
-                      {msg.timestamp || ""}
+                      {formatMessageTime(msg.timestamp)}
                     </span>
 
-                    {/* Delivery ticks */}
+                    {/* Delivery ticks - Only on sender's own outgoing messages */}
                     {isMe && (
-                      <span title={msg.status}>
+                      <span title={msg.status} className="inline-flex items-center">
                         {msg.status === "read" ? (
-                          <CheckCheck className="w-3 h-3 text-sky-400" />
+                          <CheckCheck
+                            className="w-3.5 h-3.5 transition-colors"
+                            style={{ color: "var(--read-tick, #38bdf8)" }}
+                          />
                         ) : msg.status === "delivered" ? (
-                          <CheckCheck className="w-3 h-3 opacity-90" />
+                          <CheckCheck className="w-3.5 h-3.5 opacity-70" />
                         ) : msg.status === "failed" ? (
-                          <AlertCircle className="w-3 h-3 text-destructive" />
+                          <AlertCircle className="w-3.5 h-3.5 text-destructive" />
                         ) : msg.status === "sending" ? (
                           <Clock className="w-3 h-3 opacity-60 animate-pulse" />
                         ) : (
-                          <Check className="w-3 h-3 opacity-80" />
+                          <Check className="w-3.5 h-3.5 opacity-70" />
                         )}
                       </span>
                     )}
@@ -582,6 +697,28 @@ export function ConversationView({
           </Button>
         </div>
       </div>
+    </div>
+
+      {/* Slide-in Chat Info Panel */}
+      <AnimatePresence>
+        {isInfoOpen && (
+          <motion.div
+            key="chat-info-panel-container"
+            initial={{ x: "100%", opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: "100%", opacity: 0 }}
+            transition={{ type: "spring", damping: 30, stiffness: 350 }}
+            className="fixed inset-0 md:static md:inset-auto z-40 md:z-20 h-full shrink-0 flex overflow-hidden"
+          >
+            <ChatInfoPanel
+              thread={thread}
+              onClose={() => setIsInfoOpen(false)}
+              autoTranslateEnabled={autoTranslateEnabled}
+              onToggleAutoTranslate={() => setAutoTranslateEnabled((prev) => !prev)}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

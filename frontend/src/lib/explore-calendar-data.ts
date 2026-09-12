@@ -65,6 +65,9 @@ export interface ConnectedFriend {
   lastActive: string;
   online: boolean;
   preferredReceivingLanguage?: string;
+  bio?: string;
+  interests?: string[];
+  avatarUrl?: string;
 }
 
 export interface CalendarDayActivity {

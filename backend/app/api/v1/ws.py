@@ -49,9 +49,11 @@ from app.models.message import (
     IncomingAckFrame,
     IncomingCallSignalFrame,
     IncomingMessageFrame,
+    IncomingReadFrame,
     OutgoingAckRelayFrame,
     OutgoingCallSignalFrame,
     OutgoingMessageFrame,
+    OutgoingReadRelayFrame,
     PresenceFrame,
 )
 from app.models.user import User
@@ -302,6 +304,42 @@ async def _handle_ack_frame(
             )
 
 
+async def _handle_read_frame(
+    raw: dict,
+    recipient: User,
+) -> None:
+    """Validate and relay a read receipt from recipient back to original sender."""
+    try:
+        frame = IncomingReadFrame.model_validate(raw)
+    except ValidationError:
+        logger.warning(f"Invalid read frame from user_id={recipient.id}")
+        return
+
+    connections_col = get_connections_collection()
+    cursor = connections_col.find(
+        {
+            "$or": [
+                {"user_a_id": recipient.id},
+                {"user_b_id": recipient.id},
+            ],
+            "status": "ACCEPTED",
+        }
+    )
+    relay_frame = OutgoingReadRelayFrame(
+        client_message_id=frame.client_message_id,
+        client_message_ids=frame.client_message_ids,
+        reader_id=recipient.id,
+    ).model_dump()
+
+    async for doc in cursor:
+        peer_id = doc["user_b_id"] if doc["user_a_id"] == recipient.id else doc["user_a_id"]
+        if connection_manager.is_online(peer_id):
+            await connection_manager.send_to_user(peer_id, relay_frame)
+            logger.info(
+                f"WS read relay: from={recipient.id} to peer={peer_id}"
+            )
+
+
 async def _handle_call_signal_frame(
     raw: dict,
     sender: User,
@@ -437,6 +475,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 await _handle_call_signal_frame(raw, user, websocket)
             elif frame_type == "ack":
                 await _handle_ack_frame(raw, user)
+            elif frame_type == "read":
+                await _handle_read_frame(raw, user)
             elif frame_type == "ping":
                 await websocket.send_json({"type": "pong"})
             else:

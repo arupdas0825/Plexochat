@@ -29,6 +29,7 @@
   --destructive-foreground: #ffffff;
   --online: #10b981;
   --offline: #94a3b8;
+  --read-tick: #38bdf8;
 
   /* Borders & Focus */
   --border: #e2e4ea;
@@ -92,6 +93,7 @@
   --destructive-foreground: #ffffff;
   --online: #10b981;
   --offline: #64748b;
+  --read-tick: #38bdf8;
 
   /* Borders & Focus */
   --border: #222433;
@@ -128,6 +130,7 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-read-tick: var(--read-tick);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

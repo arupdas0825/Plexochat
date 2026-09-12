@@ -20,7 +20,7 @@ E2EE NOTE:
     client-side only.
 """
 
-from typing import Literal, Optional
+from typing import Any, List, Literal, Optional, Union
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
@@ -71,6 +71,20 @@ class IncomingAckFrame(BaseModel):
     client_message_id: str = Field(..., min_length=1, max_length=128)
 
 
+class IncomingReadFrame(BaseModel):
+    """Read receipt sent by the recipient back to the server when message(s) are viewed."""
+
+    type: Literal["read"]
+    client_message_id: Optional[str] = Field(default=None, max_length=128)
+    client_message_ids: Optional[List[str]] = Field(default=None, max_length=200)
+
+    @model_validator(mode="after")
+    def check_has_ids(self) -> "IncomingReadFrame":
+        if not self.client_message_id and not self.client_message_ids:
+            raise ValueError("Either client_message_id or client_message_ids must be provided.")
+        return self
+
+
 # ---------------------------------------------------------------------------
 # Outgoing frames (server → client)
 # ---------------------------------------------------------------------------
@@ -104,6 +118,15 @@ class OutgoingAckRelayFrame(BaseModel):
 
     type: Literal["ack_relay"] = "ack_relay"
     client_message_id: str
+
+
+class OutgoingReadRelayFrame(BaseModel):
+    """Read receipt relayed back to the original sender so the UI can show double blue ticks."""
+
+    type: Literal["read_relay"] = "read_relay"
+    client_message_id: Optional[str] = None
+    client_message_ids: Optional[List[str]] = None
+    reader_id: str
 
 
 class PresenceFrame(BaseModel):
@@ -152,8 +175,8 @@ class IncomingCallSignalFrame(BaseModel):
     call_id: str = Field(..., min_length=1, max_length=128)
     to_user_id: str = Field(..., min_length=1, max_length=128)
     call_type: Literal["voice", "video"] = "voice"
-    sdp: Optional[dict] = None
-    candidate: Optional[dict] = None
+    sdp: Optional[Union[dict, str, Any]] = None
+    candidate: Optional[Union[dict, str, Any]] = None
     reason: Optional[str] = None
 
 
@@ -167,7 +190,7 @@ class OutgoingCallSignalFrame(BaseModel):
     caller_name: Optional[str] = None
     caller_avatar: Optional[str] = None
     call_type: Literal["voice", "video"] = "voice"
-    sdp: Optional[dict] = None
-    candidate: Optional[dict] = None
+    sdp: Optional[Union[dict, str, Any]] = None
+    candidate: Optional[Union[dict, str, Any]] = None
     reason: Optional[str] = None
 

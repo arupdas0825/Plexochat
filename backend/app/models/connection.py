@@ -35,6 +35,10 @@ class UserProfilePublic(BaseModel):
     relationship_status: RelationshipStatus = RelationshipStatus.NONE
     connection_request_id: Optional[str] = None
     online: Optional[bool] = None
+    bio: Optional[str] = None
+    spoken_languages: list[str] = Field(default_factory=list)
+    learning_languages: list[str] = Field(default_factory=list)
+    interests: list[str] = Field(default_factory=list)
 
 
 class ConnectionCreateRequest(BaseModel):
