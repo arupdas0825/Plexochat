@@ -266,15 +266,15 @@ Contributions are welcome under the terms of [`LICENSE.md`](./LICENSE.md). By su
 
 ## ⚖️ License
 
-PlexoChat is released under a **custom proprietary license** — see [`LICENSE.md`](./LICENSE.md) for full terms.
+**© 2026 Arup Das. All Rights Reserved.**
 
-> In short: the source is available for personal evaluation and approved contributions, but commercial use, redistribution, and rebranding require written permission from the license holder.
->
-> *(Prefer open-source instead — MIT, Apache-2.0, or AGPL-3.0? Just say the word and it'll be regenerated.)*
+PlexoChat is **proprietary, closed-source software**. It is not licensed under MIT, Apache-2.0, GPL, BSD, ISC, or any other open-source license. See [`LICENSE.md`](./LICENSE.md) for full terms.
+
+> Copying, redistribution, modification, sublicensing, resale, commercial use, or creation of derivative works — in whole or in part — is prohibited without Arup Das's explicit prior written permission. This also covers the PlexoChat name, logo, branding, UI/UX designs, visual assets, product identity, and original documentation. Unauthorized use may be pursued as a violation of applicable intellectual property law.
 
 ## ™️ Trademark
 
-"PlexoChat"™ and the PlexoChat logo are trademarks of **[Your Name / Company Name]**. The software license above does not grant rights to use the PlexoChat name or brand. See [`TRADEMARK.md`](./TRADEMARK.md) for what's permitted and what requires written permission.
+"PlexoChat"™ and the PlexoChat logo are trademarks of **Arup Das**. The software license above does not grant rights to use the PlexoChat name or brand. See [`TRADEMARK.md`](./TRADEMARK.md) for what's permitted and what requires written permission.
 
 <br/>
 
@@ -286,7 +286,7 @@ For licensing, trademark, security disclosures, or general inquiries: **[arupwor
 
 <div align="center">
 
-<sub>© 2026 PlexoChat. All rights reserved.</sub>
+<sub>© 2026 Arup Das. All rights reserved. PlexoChat is proprietary software.</sub>
 
 **PlexoChat™** — *Speak naturally. Connect globally. Understand each other.*
 
