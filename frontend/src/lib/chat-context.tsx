@@ -42,6 +42,8 @@ interface ChatContextType {
     photoUrl?: string
   ) => Promise<void>;
   startChatWithUser: (user: ChatUser, initialText?: string) => string;
+  sendWsFrame: (frame: Record<string, unknown>) => boolean;
+  registerCallSignalHandler: (handler: (signal: any) => void) => () => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -53,29 +55,99 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
-  // Initialize Olm account on login
+  const userRef = useRef(user);
   useEffect(() => {
-    if (!user || !firebaseUser) return;
-    initOlm()
-      .then(() => getOrCreateAccount(user.id, () => firebaseUser.getIdToken()))
-      .catch((err) =>
-        console.warn("[ChatContext] Olm account init warning:", err)
-      );
-  }, [user, firebaseUser]);
+    userRef.current = user;
+  }, [user]);
 
-  // Sync threads with accepted connections & IndexedDB history
+  const activeThreadIdRef = useRef(activeThreadId);
+  useEffect(() => {
+    activeThreadIdRef.current = activeThreadId;
+  }, [activeThreadId]);
+
+  const refreshConnectionsRef = useRef(refreshConnections);
+  useEffect(() => {
+    refreshConnectionsRef.current = refreshConnections;
+  }, [refreshConnections]);
+
+  const callSignalHandlersRef = useRef<Set<(signal: any) => void>>(new Set());
+
+  const registerCallSignalHandler = useCallback((handler: (signal: any) => void) => {
+    callSignalHandlersRef.current.add(handler);
+    return () => {
+      callSignalHandlersRef.current.delete(handler);
+    };
+  }, []);
+
+  const sendWsFrame = useCallback((frame: Record<string, unknown>): boolean => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(frame));
+      return true;
+    }
+    return false;
+  }, []);
+
+  // Defer Olm account initialization to background idle time to prevent blocking initial render
+  useEffect(() => {
+    if (!user?.id || !firebaseUser) return;
+    let isCancelled = false;
+
+    const scheduleInit = () => {
+      initOlm()
+        .then(() => {
+          if (!isCancelled) {
+            return getOrCreateAccount(user.id, () => firebaseUser.getIdToken());
+          }
+        })
+        .catch((err) =>
+          console.warn("[ChatContext] Olm account background init:", err)
+        );
+    };
+
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      const handle = (window as any).requestIdleCallback(scheduleInit, { timeout: 3000 });
+      return () => {
+        isCancelled = true;
+        (window as any).cancelIdleCallback(handle);
+      };
+    } else {
+      const timer = setTimeout(scheduleInit, 1000);
+      return () => {
+        isCancelled = true;
+        clearTimeout(timer);
+      };
+    }
+  }, [user?.id, firebaseUser?.uid]);
+
+  // Frame-1 instant thread hydration from local cache
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      const saved = localStorage.getItem(`plexochat_threads_${user.id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setThreads((prev) => (prev.length === 0 ? parsed : prev));
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [user?.id]);
+
+  // Fast hydration: load threads immediately without blocking on all message histories
   useEffect(() => {
     let isMounted = true;
 
-    async function loadThreadsAndHistory() {
-      if (!user) {
+    async function loadThreads() {
+      if (!user?.id) {
         if (isMounted) {
           setThreads([]);
           setActiveThreadId(null);
         }
         return;
       }
-      // 1. Load threads from IndexedDB with fallback to localStorage
+      // 1. Load threads metadata from IndexedDB or localStorage fallback
       let existingThreads: ChatThread[] = (await getUserThreads(user.id)) || [];
       if (existingThreads.length === 0) {
         try {
@@ -88,24 +160,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // 2. Load cached messages per thread from IndexedDB
-      const threadPromises = existingThreads.map(async (th) => {
-        const storedMsgs = await getThreadMessages(th.id);
-        if (storedMsgs && storedMsgs.length > 0) {
-          return {
-            ...th,
-            messages: storedMsgs,
-            lastMessage: storedMsgs[storedMsgs.length - 1] || th.lastMessage,
-          };
-        }
-        return th;
-      });
-
-      const hydratedThreads = await Promise.all(threadPromises);
       if (!isMounted) return;
 
-      // 3. Ensure every accepted connection has a thread
-      const mergedThreads: ChatThread[] = [...hydratedThreads];
+      // 2. Ensure every accepted connection has a thread
+      const mergedThreads: ChatThread[] = [...existingThreads];
 
       connections.forEach((conn) => {
         const foundIdx = mergedThreads.findIndex(
@@ -159,12 +217,40 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       );
     }
 
-    loadThreadsAndHistory();
+    loadThreads();
 
     return () => {
       isMounted = false;
     };
-  }, [user, connections]);
+  }, [user?.id, connections]);
+
+  // Load message history on-demand only for the active thread
+  useEffect(() => {
+    if (!activeThreadId) return;
+    let isCurrent = true;
+
+    getThreadMessages(activeThreadId).then((storedMsgs) => {
+      if (!isCurrent) return;
+      if (storedMsgs && storedMsgs.length > 0) {
+        setThreads((prev) =>
+          prev.map((t) => {
+            if (t.id === activeThreadId) {
+              return {
+                ...t,
+                messages: storedMsgs,
+                lastMessage: storedMsgs[storedMsgs.length - 1] || t.lastMessage,
+              };
+            }
+            return t;
+          })
+        );
+      }
+    });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [activeThreadId]);
 
   // Connect to WebSocket relay
   useEffect(() => {
@@ -219,10 +305,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               let photoUrl: string | undefined = undefined;
 
               // E2EE Decryption flow (if ciphertext envelope is present)
+              const currentUserId = userRef.current?.id || user.id;
               if (data.ciphertext) {
                 try {
                   const decrypted: DecryptedPayload = await decryptMessage(
-                    user.id,
+                    currentUserId,
                     fromUserId,
                     data.ciphertext,
                     data.message_type ?? 0,
@@ -280,14 +367,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                       lastMessage: newMsg,
                       messages: [...th.messages, newMsg],
                       unreadCount:
-                        th.id === activeThreadId
+                        th.id === activeThreadIdRef.current
                           ? 0
                           : (th.unreadCount || 0) + 1,
                     };
                   }
                   return th;
                 });
-                saveUserThreads(user.id, updated);
+                saveUserThreads(currentUserId, updated);
                 return updated;
               });
 
@@ -337,7 +424,15 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               data.type === "CONNECTION_ACCEPTED" ||
               data.type === "CONNECTION_REVOKED"
             ) {
-              refreshConnections();
+              refreshConnectionsRef.current();
+            } else if (data.type === "call_signal") {
+              callSignalHandlersRef.current.forEach((handler) => {
+                try {
+                  handler(data);
+                } catch (err) {
+                  console.warn("[PlexoChat WS] Error in call signal handler:", err);
+                }
+              });
             } else if (data.type === "presence") {
               const isUserOnline = data.status === "online";
               setThreads((prev) =>
@@ -390,7 +485,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       if (socket) socket.close();
       wsRef.current = null;
     };
-  }, [firebaseUser, user, refreshConnections, activeThreadId]);
+  }, [firebaseUser?.uid, user?.id]);
 
   const saveThreads = (updatedThreads: ChatThread[]) => {
     setThreads(updatedThreads);
@@ -625,6 +720,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         selectThread,
         sendMessage,
         startChatWithUser,
+        sendWsFrame,
+        registerCallSignalHandler,
       }}
     >
       {children}

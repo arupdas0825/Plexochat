@@ -58,6 +58,29 @@ async def _fetch_public_profile(user_id: str) -> Optional[UserProfilePublic]:
     )
 
 
+async def _fetch_public_profiles_batch(user_ids: List[str]) -> dict:
+    """Batch fetches user documents for a list of user IDs in a single MongoDB query."""
+    if not user_ids:
+        return {}
+    users_col = get_users_collection()
+    queries = [_to_object_id_or_str(uid) for uid in set(user_ids) if uid]
+    cursor = users_col.find({"_id": {"$in": queries}})
+    result = {}
+    async for doc in cursor:
+        uid_str = str(doc["_id"])
+        result[uid_str] = UserProfilePublic(
+            id=uid_str,
+            username=doc.get("username", "user"),
+            plexochat_id=doc.get("plexochat_id", doc.get("username", "px_user")),
+            display_name=doc.get("display_name") or doc.get("username") or "User",
+            photo_url=doc.get("photo_url"),
+            preferred_receiving_language=doc.get("preferred_receiving_language", "en"),
+            relationship_status=RelationshipStatus.ACCEPTED,
+            online=connection_manager.is_online(uid_str),
+        )
+    return result
+
+
 @router.post(
     "/requests",
     response_model=ConnectionRequestPublic,
@@ -216,10 +239,14 @@ async def get_incoming_requests(
         {"receiver_id": current_user.id, "status": ConnectionRequestStatus.PENDING}
     ).sort("created_at", -1)
 
+    req_docs = await cursor.to_list(length=100)
+    sender_ids = [doc["sender_id"] for doc in req_docs]
+    profiles_map = await _fetch_public_profiles_batch(sender_ids)
+
     results: List[ConnectionRequestPublic] = []
-    async for doc in cursor:
+    for doc in req_docs:
         sender_id = doc["sender_id"]
-        sender_prof = await _fetch_public_profile(sender_id)
+        sender_prof = profiles_map.get(sender_id)
         results.append(
             ConnectionRequestPublic(
                 id=str(doc["_id"]),
@@ -249,10 +276,14 @@ async def get_outgoing_requests(
         {"sender_id": current_user.id, "status": ConnectionRequestStatus.PENDING}
     ).sort("created_at", -1)
 
+    req_docs = await cursor.to_list(length=100)
+    target_ids = [doc["receiver_id"] for doc in req_docs]
+    profiles_map = await _fetch_public_profiles_batch(target_ids)
+
     results: List[ConnectionRequestPublic] = []
-    async for doc in cursor:
+    for doc in req_docs:
         target_id = doc["receiver_id"]
-        target_prof = await _fetch_public_profile(target_id)
+        target_prof = profiles_map.get(target_id)
         results.append(
             ConnectionRequestPublic(
                 id=str(doc["_id"]),
@@ -493,10 +524,17 @@ async def list_connections(
         }
     ).sort("updated_at", -1)
 
+    conn_docs = await cursor.to_list(length=200)
+    peer_ids = [
+        doc["user_b_id"] if doc["user_a_id"] == current_user.id else doc["user_a_id"]
+        for doc in conn_docs
+    ]
+    profiles_map = await _fetch_public_profiles_batch(peer_ids)
+
     connections: List[ConnectionPublic] = []
-    async for doc in cursor:
+    for doc in conn_docs:
         peer_id = doc["user_b_id"] if doc["user_a_id"] == current_user.id else doc["user_a_id"]
-        peer_profile = await _fetch_public_profile(peer_id)
+        peer_profile = profiles_map.get(peer_id)
         if not peer_profile:
             continue
         connections.append(

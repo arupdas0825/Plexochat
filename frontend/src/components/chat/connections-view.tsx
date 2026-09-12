@@ -132,7 +132,7 @@ export function ConnectionsView({
                 Contacts &amp; Requests
               </h2>
               {incomingRequests.length > 0 && (
-                <Badge variant="accent" className="text-[10px] py-0 px-2 font-mono">
+                <Badge variant="secondary" className="text-[10px] py-0 px-2 font-mono font-semibold">
                   {incomingRequests.length} new
                 </Badge>
               )}
@@ -399,7 +399,7 @@ export function ConnectionsView({
 
       {/* 4. Trust Notice */}
       <div className="max-w-2xl p-3.5 rounded-2xl bg-secondary/30 border border-border/50 text-xs text-muted-foreground flex items-center gap-2">
-        <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+        <ShieldCheck className="w-4 h-4 text-muted-foreground shrink-0" />
         <span>PlexoChat zero-spam guarantee: only mutually accepted contacts can transmit encrypted messages.</span>
       </div>
 

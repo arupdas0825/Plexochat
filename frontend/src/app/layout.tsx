@@ -5,6 +5,8 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/lib/auth-context";
 import { ConnectionsProvider } from "@/lib/connections-context";
 import { ChatProvider } from "@/lib/chat-context";
+import { CallProvider } from "@/lib/call-context";
+import { CallModal } from "@/components/chat/call-modal";
 import { ServiceWorkerRegister } from "@/components/pwa/service-worker-register";
 import { PwaInstallPrompt } from "@/components/pwa/pwa-install-prompt";
 
@@ -66,9 +68,12 @@ export default function RootLayout({
           <AuthProvider>
             <ConnectionsProvider>
               <ChatProvider>
-                {children}
-                <ServiceWorkerRegister />
-                <PwaInstallPrompt />
+                <CallProvider>
+                  {children}
+                  <CallModal />
+                  <ServiceWorkerRegister />
+                  <PwaInstallPrompt />
+                </CallProvider>
               </ChatProvider>
             </ConnectionsProvider>
           </AuthProvider>

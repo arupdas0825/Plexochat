@@ -14,7 +14,7 @@ import {
   CheckCheck,
   Trash2,
   X,
-  Sparkles,
+  Globe2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -104,33 +104,31 @@ export function SidebarNav({
           )}
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1">
           <Link href="/explore?tab=connections">
             <Button
-              size="sm"
-              variant="outline"
-              className="h-8 w-8 p-0 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary relative border-border/70 cursor-pointer"
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary relative cursor-pointer"
               title="Contacts & Connection Requests"
               aria-label="Contacts & Connection Requests"
             >
               <Users className="w-4 h-4" />
               {pendingIncomingCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-primary text-white text-[9px] font-bold flex items-center justify-center font-mono shadow-xs">
-                  {pendingIncomingCount}
-                </span>
+                <span className="absolute 1 top-1 right-1 w-2 h-2 rounded-full bg-primary" />
               )}
             </Button>
           </Link>
 
           <Button
-            size="sm"
+            size="icon"
+            variant="ghost"
             onClick={onOpenNewChat}
-            className="h-8 px-2.5 rounded-xl gap-1.5 text-xs font-semibold shadow-xs active:scale-95 cursor-pointer"
+            className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary cursor-pointer"
             title="Start new conversation"
             aria-label="Start new conversation"
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>New Chat</span>
+            <Plus className="w-4 h-4" />
           </Button>
         </div>
       </div>
@@ -262,12 +260,12 @@ export function SidebarNav({
 
                   <div className="mt-1 flex items-center justify-between gap-1">
                     <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground font-mono">
-                      <Sparkles className="w-2.5 h-2.5 text-primary/70" />
+                      <Globe2 className="w-2.5 h-2.5 text-muted-foreground" />
                       <span>{p.preferredLanguage || "Direct"}</span>
                     </span>
 
                     {hasUnread && (
-                      <span className="px-1.5 py-0.2 rounded-full bg-primary text-white text-[9px] font-bold font-mono">
+                      <span className="px-1.5 py-0.2 rounded-full bg-primary text-primary-foreground text-[9px] font-semibold font-mono">
                         {thread.unreadCount > 0 ? thread.unreadCount : "1"}
                       </span>
                     )}

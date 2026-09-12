@@ -13,6 +13,7 @@ WebSocket context managers via anyio thread offloading.
 
 import json
 import uuid
+import time
 from datetime import datetime, timezone
 
 import pytest
@@ -31,6 +32,18 @@ WS_PATH = "/api/v1/ws"
 
 def _token(uid: str) -> str:
     return f"test_token_{uid}"
+
+
+def _recv(ws, expected_type: str = None):
+    """Drain presence frames and return the expected frame (or first non-presence frame)."""
+    for _ in range(10):
+        frame = ws.receive_json()
+        if expected_type:
+            if frame.get("type") == expected_type:
+                return frame
+        elif frame.get("type") != "presence":
+            return frame
+    return frame
 
 
 # ---------------------------------------------------------------------------
@@ -249,3 +262,96 @@ async def test_ws_invalid_frame_no_disconnect(db_and_users):
             assert response["type"] == "error"
 
     print("\n  ✓ test_ws_invalid_frame_no_disconnect passed")
+
+
+@pytest.mark.asyncio(loop_scope="module")
+async def test_ws_call_signal_relay_online(db_and_users):
+    """Call signal frames (invite/offer/answer/ice) are relayed to online connected peer."""
+    id_a, id_b = db_and_users
+    await _ensure_connection(id_a, id_b, "ACCEPTED")
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        with client.websocket_connect(f"{WS_PATH}?token={_token(USER_A_UID)}") as ws_a, \
+             client.websocket_connect(f"{WS_PATH}?token={_token(USER_B_UID)}") as ws_b:
+
+            call_id = f"test_call_{int(time.time())}"
+            ws_a.send_json({
+                "type": "call_signal",
+                "to_user_id": id_b,
+                "call_id": call_id,
+                "signal_type": "invite",
+                "call_type": "video",
+            })
+
+            signal_frame = _recv(ws_b, expected_type="call_signal")
+            assert signal_frame["type"] == "call_signal"
+            assert signal_frame["signal_type"] == "invite"
+            assert signal_frame["from_user_id"] == id_a
+            assert signal_frame["call_id"] == call_id
+            assert signal_frame["call_type"] == "video"
+
+            # Peer answers
+            ws_b.send_json({
+                "type": "call_signal",
+                "to_user_id": id_a,
+                "call_id": call_id,
+                "signal_type": "answer",
+                "sdp": "v=0\r\ntest",
+                "call_type": "video",
+            })
+
+            answer_frame = _recv(ws_a, expected_type="call_signal")
+            assert answer_frame["type"] == "call_signal"
+            assert answer_frame["signal_type"] == "answer"
+            assert answer_frame["from_user_id"] == id_b
+            assert answer_frame["sdp"] == "v=0\r\ntest"
+
+    print("\n  ✓ test_ws_call_signal_relay_online passed")
+
+
+@pytest.mark.asyncio(loop_scope="module")
+async def test_ws_call_signal_rejected_if_no_connection(db_and_users):
+    """Call signal to user without ACCEPTED connection is rejected."""
+    id_a, id_b = db_and_users
+    await _remove_connection(id_a, id_b)
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        with client.websocket_connect(f"{WS_PATH}?token={_token(USER_A_UID)}") as ws_a:
+            ws_a.send_json({
+                "type": "call_signal",
+                "to_user_id": id_b,
+                "call_id": "call_unauth",
+                "signal_type": "invite",
+                "call_type": "voice",
+            })
+
+            err = _recv(ws_a, expected_type="error")
+            assert err["type"] == "error"
+            assert err["code"] == "NOT_CONNECTED"
+
+    print("\n  ✓ test_ws_call_signal_rejected_if_no_connection passed")
+
+
+@pytest.mark.asyncio(loop_scope="module")
+async def test_ws_call_signal_peer_offline(db_and_users):
+    """Call invite to offline user returns call_signal with signal_type='unavailable'."""
+    id_a, id_b = db_and_users
+    await _ensure_connection(id_a, id_b, "ACCEPTED")
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        with client.websocket_connect(f"{WS_PATH}?token={_token(USER_A_UID)}") as ws_a:
+            ws_a.send_json({
+                "type": "call_signal",
+                "to_user_id": id_b,
+                "call_id": "call_offline",
+                "signal_type": "invite",
+                "call_type": "video",
+            })
+
+            resp = _recv(ws_a, expected_type="call_signal")
+            assert resp["type"] == "call_signal"
+            assert resp["signal_type"] == "unavailable"
+            assert resp["call_id"] == "call_offline"
+
+    print("\n  ✓ test_ws_call_signal_peer_offline passed")
+

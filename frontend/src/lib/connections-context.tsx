@@ -28,8 +28,30 @@ const ConnectionsContext = createContext<ConnectionsContextType | undefined>(und
 export function ConnectionsProvider({ children }: { children: React.ReactNode }) {
   const { user, firebaseUser } = useAuth();
   const [exploreUsers, setExploreUsers] = useState<DiscoverableUser[]>([]);
-  const [requests, setRequests] = useState<StoredConnectionRequest[]>([]);
-  const [connections, setConnections] = useState<ConnectedFriend[]>([]);
+  const [requests, setRequests] = useState<StoredConnectionRequest[]>(() => {
+    if (typeof window !== "undefined" && user?.id) {
+      try {
+        const cached = localStorage.getItem(`plexochat_reqs_${user.id}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch {}
+    }
+    return [];
+  });
+  const [connections, setConnections] = useState<ConnectedFriend[]>(() => {
+    if (typeof window !== "undefined" && user?.id) {
+      try {
+        const cached = localStorage.getItem(`plexochat_conns_${user.id}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch {}
+    }
+    return [];
+  });
   const backendUrl = getBackendUrl();
 
   const authFetch = useCallback(
@@ -46,9 +68,34 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
     [firebaseUser, backendUrl]
   );
 
+  // Hydrate connections and requests from cache on mount / user change
+  useEffect(() => {
+    if (!user?.id) {
+      return;
+    }
+    try {
+      const cachedConns = localStorage.getItem(`plexochat_conns_${user.id}`);
+      if (cachedConns) {
+        const parsed = JSON.parse(cachedConns);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setConnections((prev) => (prev.length === 0 ? parsed : prev));
+        }
+      }
+      const cachedReqs = localStorage.getItem(`plexochat_reqs_${user.id}`);
+      if (cachedReqs) {
+        const parsed = JSON.parse(cachedReqs);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setRequests((prev) => (prev.length === 0 ? parsed : prev));
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [user?.id]);
+
   // Fetch real connections from MongoDB
   const fetchConnections = useCallback(async () => {
-    if (!firebaseUser) return;
+    if (!firebaseUser || !user?.id) return;
     try {
       const res = await authFetch("/connections");
       if (!res.ok) {
@@ -76,14 +123,19 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
         };
       });
       setConnections(mappedConns);
+      try {
+        localStorage.setItem(`plexochat_conns_${user.id}`, JSON.stringify(mappedConns));
+      } catch {
+        // ignore
+      }
     } catch (err) {
       console.warn("Error fetching connections:", err);
     }
-  }, [firebaseUser, authFetch]);
+  }, [firebaseUser, user?.id, authFetch]);
 
   // Fetch incoming and outgoing connection requests from MongoDB
   const fetchRequests = useCallback(async () => {
-    if (!firebaseUser) return;
+    if (!firebaseUser || !user?.id) return;
     try {
       const [inRes, outRes] = await Promise.all([
         authFetch("/connections/requests/incoming"),
@@ -133,22 +185,28 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
         };
       });
 
-      setRequests([...mappedIn, ...mappedOut]);
+      const allRequests = [...mappedIn, ...mappedOut];
+      setRequests(allRequests);
+      try {
+        localStorage.setItem(`plexochat_reqs_${user.id}`, JSON.stringify(allRequests));
+      } catch {
+        // ignore
+      }
     } catch (err) {
       console.warn("Error fetching connection requests:", err);
     }
-  }, [firebaseUser, authFetch]);
+  }, [firebaseUser, user?.id, authFetch]);
 
   const refreshConnections = useCallback(async () => {
     await Promise.all([fetchConnections(), fetchRequests()]);
   }, [fetchConnections, fetchRequests]);
 
-  // Load initially when user / firebaseUser is ready
+  // Load in background when user / firebaseUser is ready
   useEffect(() => {
     let active = true;
-    if (firebaseUser) {
+    if (firebaseUser && user?.id) {
       void refreshConnections();
-    } else {
+    } else if (!user && !firebaseUser) {
       if (active) {
         setConnections((prev) => (prev.length > 0 ? [] : prev));
         setRequests((prev) => (prev.length > 0 ? [] : prev));
@@ -157,7 +215,7 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
     return () => {
       active = false;
     };
-  }, [firebaseUser, refreshConnections]);
+  }, [firebaseUser, user?.id, refreshConnections]);
 
   const pendingIncomingCount = requests.filter(
     (r) => r.type === "incoming" && r.status === "pending"

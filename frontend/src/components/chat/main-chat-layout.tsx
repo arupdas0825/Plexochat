@@ -82,8 +82,8 @@ export function MainChatLayout() {
               <span>Start a New Chat</span>
             </Button>
             <div className="mt-8 text-xs text-muted-foreground flex items-center gap-1.5">
-              <ShieldCheck className="w-4 h-4 text-emerald-500" />
-              <span>End-to-End Encrypted Relay Active</span>
+              <ShieldCheck className="w-4 h-4 text-muted-foreground" />
+              <span>End-to-end encrypted</span>
             </div>
           </div>
         )}

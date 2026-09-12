@@ -293,44 +293,86 @@ async function syncUserToBackend(fbUser: FirebaseUser): Promise<BackendSyncRespo
 }
 
 
+const getCachedSessionUser = (): UserProfile | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const cached = localStorage.getItem("plexochat_current_user");
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed && parsed.id) {
+        return parsed;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+};
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<UserProfile | null>(null);
+  const [user, setUser] = useState<UserProfile | null>(getCachedSessionUser);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState<boolean>(() => !getCachedSessionUser());
   const router = useRouter();
 
-  // Sync with Firebase auth state
+  // Instant session hydration from local cache on client mount
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+    try {
+      const cached = localStorage.getItem("plexochat_current_user");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && parsed.id) {
+          setUser((prev) => prev || parsed);
+          setIsLoading(false);
+        }
+      }
+    } catch {
+      // ignore JSON parse error
+    }
+  }, []);
+
+  // Sync with Firebase auth state without blocking the UI
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
       setFirebaseUser(fbUser);
 
       if (fbUser) {
-        // Sync to backend MongoDB to get MongoDB _id and handle
-        const syncData = await syncUserToBackend(fbUser);
-
         const registered = getRegisteredUsers();
         let found = registered.find(
           (u) =>
-            u.id === (syncData?.user_id || fbUser.uid) ||
             u.id === fbUser.uid ||
             (fbUser.email && u.email?.toLowerCase() === fbUser.email.toLowerCase())
         );
 
         if (!found) {
+          try {
+            const cached = localStorage.getItem("plexochat_current_user");
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              if (parsed && (parsed.id === fbUser.uid || parsed.email === fbUser.email)) {
+                found = parsed;
+              }
+            }
+          } catch {
+            // ignore
+          }
+        }
+
+        if (!found) {
           const emailPrefix = fbUser.email
             ? fbUser.email.split("@")[0].replace(/[^a-z0-9_]/gi, "").toLowerCase()
             : "";
-          const fallbackUsername = syncData?.username || emailPrefix || "user_" + fbUser.uid.slice(0, 6);
+          const fallbackUsername = emailPrefix || "user_" + fbUser.uid.slice(0, 6);
 
           found = {
-            id: syncData?.user_id || fbUser.uid,
+            id: fbUser.uid,
             email: fbUser.email || undefined,
             username: fallbackUsername,
-            displayName: syncData?.display_name || fbUser.displayName || fallbackUsername,
-            plexoChatId: syncData?.plexochat_id || "@" + fallbackUsername,
-            preferredReceivingLanguage: syncData?.preferred_receiving_language || "en",
+            displayName: fbUser.displayName || fallbackUsername,
+            plexoChatId: "@" + fallbackUsername,
+            preferredReceivingLanguage: "en",
             preferredLanguageName: "English",
-            avatarUrl: syncData?.photo_url || fbUser.photoURL || undefined,
+            avatarUrl: fbUser.photoURL || undefined,
             avatarBg: "from-blue-600 to-indigo-600",
             languagesSpoken: ["English"],
             languagesLearning: [],
@@ -344,18 +386,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           saveRegisteredUser(found);
         } else {
           let changed = false;
-          if (syncData?.user_id && found.id !== syncData.user_id) {
-            found.id = syncData.user_id;
-            changed = true;
-          }
-          if (syncData?.username && found.username !== syncData.username) {
-            found.username = syncData.username;
-            changed = true;
-          }
-          if (syncData?.plexochat_id && found.plexoChatId !== syncData.plexochat_id) {
-            found.plexoChatId = syncData.plexochat_id;
-            changed = true;
-          }
           if (fbUser.photoURL && !found.avatarUrl) {
             found.avatarUrl = fbUser.photoURL;
             changed = true;
@@ -371,11 +401,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         localStorage.setItem("plexochat_current_user", JSON.stringify(found));
         setUser(found);
+        setIsLoading(false);
+
+        // Run backend MongoDB upsert & profile reconciliation in background without blocking UI
+        syncUserToBackend(fbUser)
+          .then((syncData) => {
+            if (!syncData) return;
+            setUser((prev) => {
+              const current = prev || found;
+              let changed = false;
+              const updated = { ...current };
+
+              if (syncData.user_id && updated.id !== syncData.user_id) {
+                updated.id = syncData.user_id;
+                changed = true;
+              }
+              if (syncData.username && updated.username !== syncData.username) {
+                updated.username = syncData.username;
+                changed = true;
+              }
+              if (syncData.plexochat_id && updated.plexoChatId !== syncData.plexochat_id) {
+                updated.plexoChatId = syncData.plexochat_id;
+                changed = true;
+              }
+              if (syncData.photo_url && updated.avatarUrl !== syncData.photo_url) {
+                updated.avatarUrl = syncData.photo_url;
+                changed = true;
+              }
+              if (syncData.display_name && updated.displayName !== syncData.display_name) {
+                updated.displayName = syncData.display_name;
+                changed = true;
+              }
+              if (
+                syncData.preferred_receiving_language &&
+                updated.preferredReceivingLanguage !== syncData.preferred_receiving_language
+              ) {
+                updated.preferredReceivingLanguage = syncData.preferred_receiving_language;
+                changed = true;
+              }
+
+              if (changed) {
+                saveRegisteredUser(updated);
+                localStorage.setItem("plexochat_current_user", JSON.stringify(updated));
+                return updated;
+              }
+              return prev;
+            });
+          })
+          .catch((err) => {
+            console.warn("[PlexoChat] Background profile sync warning:", err);
+          });
       } else {
         localStorage.removeItem("plexochat_current_user");
         setUser(null);
+        setIsLoading(false);
       }
-      setIsLoading(false);
     });
 
     return () => unsubscribe();

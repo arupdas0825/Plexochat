@@ -15,6 +15,7 @@ import {
   Clock,
   ListFilter,
   CalendarDays,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -78,12 +79,9 @@ export function ConversationCalendarView() {
       {/* 1. Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-border/70">
         <div>
-          <div className="flex items-center gap-2">
-            <CalendarIcon className="w-5 h-5 text-primary" />
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-              Conversation Calendar
-            </h1>
-          </div>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+            Conversation Calendar
+          </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
             Track your language practice frequency, message milestones, and shared cultural moments.
           </p>
@@ -118,12 +116,12 @@ export function ConversationCalendarView() {
         </div>
       </div>
 
-      {/* 2. Compact Monthly Summary Stat Cards */}
+      {/* 2. Compact Monthly Summary Stat Cards (Restrained Unified Monochrome Style) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
         <div className="p-3.5 rounded-xl bg-card border border-border/70 shadow-xs">
           <div className="flex items-center justify-between text-muted-foreground text-xs mb-1">
             <span className="text-[11px] font-medium">Messages Exchanged</span>
-            <MessageSquare className="w-3.5 h-3.5 text-blue-500" />
+            <MessageSquare className="w-3.5 h-3.5 text-muted-foreground" />
           </div>
           <div className="text-xl font-bold text-foreground tracking-tight">
             {totalMessagesMonth}
@@ -136,7 +134,7 @@ export function ConversationCalendarView() {
         <div className="p-3.5 rounded-xl bg-card border border-border/70 shadow-xs">
           <div className="flex items-center justify-between text-muted-foreground text-xs mb-1">
             <span className="text-[11px] font-medium">Active Practice Days</span>
-            <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
+            <TrendingUp className="w-3.5 h-3.5 text-muted-foreground" />
           </div>
           <div className="text-xl font-bold text-foreground tracking-tight">
             {activeDaysCount} {activeDaysCount === 1 ? "Day" : "Days"}
@@ -149,7 +147,7 @@ export function ConversationCalendarView() {
         <div className="p-3.5 rounded-xl bg-card border border-border/70 shadow-xs">
           <div className="flex items-center justify-between text-muted-foreground text-xs mb-1">
             <span className="text-[11px] font-medium">Photos Shared</span>
-            <ImageIcon className="w-3.5 h-3.5 text-amber-500" />
+            <ImageIcon className="w-3.5 h-3.5 text-muted-foreground" />
           </div>
           <div className="text-xl font-bold text-foreground tracking-tight">
             {totalPhotosMonth}
@@ -162,7 +160,7 @@ export function ConversationCalendarView() {
         <div className="p-3.5 rounded-xl bg-card border border-border/70 shadow-xs">
           <div className="flex items-center justify-between text-muted-foreground text-xs mb-1">
             <span className="text-[11px] font-medium">Languages Practiced</span>
-            <Languages className="w-3.5 h-3.5 text-purple-500" />
+            <Languages className="w-3.5 h-3.5 text-muted-foreground" />
           </div>
           <div className="text-xl font-bold text-foreground tracking-tight">
             {Math.max(uniqueLangs.size, 1)}
@@ -205,8 +203,8 @@ export function ConversationCalendarView() {
                     })}
                   </span>
                   <div className="flex items-center gap-2 text-[10px] font-mono text-muted-foreground">
-                    <span>💬 {activity.messagesCount} msgs</span>
-                    {activity.photosCount > 0 && <span>📷 {activity.photosCount} photos</span>}
+                    <span>{activity.messagesCount} msgs</span>
+                    {activity.photosCount > 0 && <span>• {activity.photosCount} photos</span>}
                   </div>
                 </div>
 
@@ -347,9 +345,9 @@ export function ConversationCalendarView() {
               </h3>
               {selectedActivity ? (
                 <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-mono mt-0.5">
-                  <span>💬 {selectedActivity.messagesCount} msgs</span>
+                  <span>{selectedActivity.messagesCount} msgs</span>
                   <span>•</span>
-                  <span>📷 {selectedActivity.photosCount} photos</span>
+                  <span>{selectedActivity.photosCount} photos</span>
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -416,8 +414,9 @@ export function ConversationCalendarView() {
             )}
           </div>
 
-          <div className="pt-2 border-t border-border/50 text-[10px] text-muted-foreground text-center font-mono">
-            🔒 Logged from encrypted client sessions
+          <div className="pt-2 border-t border-border/50 text-[10px] text-muted-foreground text-center font-mono flex items-center justify-center gap-1.5">
+            <Lock className="w-3 h-3 text-muted-foreground" />
+            <span>Logged from encrypted client sessions</span>
           </div>
         </div>
       </div>

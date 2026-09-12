@@ -251,13 +251,12 @@ export function SettingsPageView() {
     { label: "Sunset Purple", value: "from-fuchsia-600 to-pink-500" },
   ];
 
-  // Navigation Items Specification
+  // Navigation Items Specification (Unified Monochrome Style)
   const NAV_ITEMS: {
     id: SettingsTabId;
     label: string;
     description: string;
     icon: React.ComponentType<{ className?: string }>;
-    colorClass: string;
     badge?: string;
   }[] = [
     {
@@ -265,51 +264,43 @@ export function SettingsPageView() {
       label: "Profile & Identity",
       description: "Bio, location & language skills",
       icon: User,
-      colorClass: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
     },
     {
       id: "languages",
       label: "Language & Translation",
       description: "Auto-translate & receiving language",
       icon: Languages,
-      colorClass: "bg-purple-500/15 text-purple-600 dark:text-purple-400",
       badge: SUPPORTED_LANGUAGES.find((l) => l.code === receivingLang)?.name,
     },
     {
       id: "security",
       label: "Privacy & Security",
-      description: "E2EE Double Ratchet & visibility",
+      description: "Encryption & visibility controls",
       icon: ShieldCheck,
-      colorClass: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-      badge: "E2EE Active",
     },
     {
       id: "notifications",
       label: "Notifications & Sound",
       description: "Chimes, alerts & banner previews",
       icon: Bell,
-      colorClass: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
     },
     {
       id: "appearance",
       label: "Appearance & Theme",
       description: "Light, dark & bubble styling",
       icon: Palette,
-      colorClass: "bg-rose-500/15 text-rose-600 dark:text-rose-400",
     },
     {
       id: "blocked",
       label: "Blocked Contacts",
       description: "Manage restricted accounts",
       icon: UserX,
-      colorClass: "bg-red-500/15 text-red-600 dark:text-red-400",
     },
     {
       id: "account",
       label: "Account & Storage",
       description: "Export data, cache & session",
       icon: KeyRound,
-      colorClass: "bg-zinc-500/15 text-zinc-600 dark:text-zinc-400",
     },
   ];
 
@@ -549,32 +540,60 @@ export function SettingsPageView() {
         return (
           <div className="space-y-6">
             <div className="p-5 sm:p-6 rounded-2xl border border-border/70 bg-card/60 backdrop-blur-xs space-y-6 shadow-xs">
-              {/* E2EE Active Banner */}
-              <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              {/* End-to-End Encryption Status */}
+              <div className="p-4 rounded-xl bg-card border border-border/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                    <ShieldCheck className="w-5 h-5" />
+                  <div className="w-9 h-9 rounded-lg bg-secondary text-muted-foreground flex items-center justify-center shrink-0">
+                    <ShieldCheck className="w-4 h-4 text-emerald-500" />
                   </div>
                   <div>
-                    <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                      <span>Signal Double Ratchet Cryptography Active</span>
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <div className="text-xs font-semibold text-foreground flex items-center gap-2">
+                      <span>End-to-End Encrypted</span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                     </div>
                     <div className="text-[11px] text-muted-foreground mt-0.5">
-                      Forward secrecy & break-in recovery enabled for all direct conversations.
+                      Messages, voice, video, and shared media are encrypted directly between devices.
                     </div>
                   </div>
                 </div>
-                <span className="px-2.5 py-1 rounded-full bg-emerald-500 text-white text-[10px] font-bold font-mono self-start sm:self-auto">
-                  VERIFIED
-                </span>
               </div>
+
+              {/* Expandable Technical Details */}
+              <details className="group rounded-xl border border-border/70 bg-secondary/20 overflow-hidden text-xs">
+                <summary className="p-3.5 font-medium text-foreground cursor-pointer flex items-center justify-between hover:bg-secondary/40 select-none">
+                  <span>About encryption & technical details</span>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground group-open:rotate-90 transition-transform" />
+                </summary>
+                <div className="p-3.5 pt-0 border-t border-border/40 space-y-2 text-[11px] text-muted-foreground leading-relaxed">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+                    <div className="p-2.5 rounded-lg bg-card border border-border/50">
+                      <div className="font-semibold text-foreground">Messaging Protocol</div>
+                      <div className="font-mono text-[10px] mt-0.5">Olm Double Ratchet (Signal protocol)</div>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-card border border-border/50">
+                      <div className="font-semibold text-foreground">Cryptographic Primitives</div>
+                      <div className="font-mono text-[10px] mt-0.5">Curve25519, AES-256-CBC, HMAC-SHA256</div>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-card border border-border/50">
+                      <div className="font-semibold text-foreground">Calling Security</div>
+                      <div className="font-mono text-[10px] mt-0.5">WebRTC DTLS-SRTP P2P Media</div>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-card border border-border/50">
+                      <div className="font-semibold text-foreground">Relay & Forward Secrecy</div>
+                      <div className="font-mono text-[10px] mt-0.5">Zero media/message persistence on relay</div>
+                    </div>
+                  </div>
+                  <p className="pt-1 text-[10px]">
+                    Client version: PlexoChat Web v1.2 • Double Ratchet Relay Active
+                  </p>
+                </div>
+              </details>
 
               {/* Identity Fingerprint */}
               <div className="space-y-2 p-4 rounded-xl bg-secondary/30 border border-border/60">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                    <KeyRound className="w-3.5 h-3.5 text-primary" />
+                    <KeyRound className="w-3.5 h-3.5 text-muted-foreground" />
                     <span>Device Cryptographic Identity Fingerprint</span>
                   </label>
                   <button
@@ -1053,7 +1072,7 @@ export function SettingsPageView() {
                       className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-secondary/40 active:bg-secondary/60 transition-colors"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                        <div className="w-8 h-8 rounded-lg bg-secondary text-muted-foreground flex items-center justify-center shrink-0">
                           <Languages className="w-4 h-4" />
                         </div>
                         <div>
@@ -1073,7 +1092,7 @@ export function SettingsPageView() {
                       className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-secondary/40 active:bg-secondary/60 transition-colors"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                        <div className="w-8 h-8 rounded-lg bg-secondary text-muted-foreground flex items-center justify-center shrink-0">
                           <Palette className="w-4 h-4" />
                         </div>
                         <div>
@@ -1093,7 +1112,7 @@ export function SettingsPageView() {
                       className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-secondary/40 active:bg-secondary/60 transition-colors"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                        <div className="w-8 h-8 rounded-lg bg-secondary text-muted-foreground flex items-center justify-center shrink-0">
                           <Bell className="w-4 h-4" />
                         </div>
                         <div>
@@ -1121,7 +1140,7 @@ export function SettingsPageView() {
                       className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-secondary/40 active:bg-secondary/60 transition-colors"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                        <div className="w-8 h-8 rounded-lg bg-secondary text-muted-foreground flex items-center justify-center shrink-0">
                           <ShieldCheck className="w-4 h-4" />
                         </div>
                         <div>
@@ -1130,7 +1149,7 @@ export function SettingsPageView() {
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                           </div>
                           <div className="text-[11px] text-muted-foreground">
-                            Signal Double Ratchet, Keys & Location
+                            End-to-end encryption & visibility
                           </div>
                         </div>
                       </div>
@@ -1144,7 +1163,7 @@ export function SettingsPageView() {
                       className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-secondary/40 active:bg-secondary/60 transition-colors"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-xl bg-red-500/15 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
+                        <div className="w-8 h-8 rounded-lg bg-secondary text-muted-foreground flex items-center justify-center shrink-0">
                           <UserX className="w-4 h-4" />
                         </div>
                         <div>
@@ -1170,7 +1189,7 @@ export function SettingsPageView() {
                       className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-secondary/40 active:bg-secondary/60 transition-colors"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-xl bg-zinc-500/15 text-zinc-600 dark:text-zinc-400 flex items-center justify-center shrink-0">
+                        <div className="w-8 h-8 rounded-lg bg-secondary text-muted-foreground flex items-center justify-center shrink-0">
                           <KeyRound className="w-4 h-4" />
                         </div>
                         <div>
@@ -1301,7 +1320,7 @@ export function SettingsPageView() {
             </div>
           </div>
 
-          {/* Navigation Items List */}
+          {/* Navigation Items List (Unified Monochrome Style) */}
           <nav className="p-1.5 rounded-2xl border border-border/70 bg-card/40 backdrop-blur-xs space-y-0.5 shadow-xs">
             {NAV_ITEMS.map((item) => {
               const Icon = item.icon;
@@ -1311,20 +1330,14 @@ export function SettingsPageView() {
                   key={item.id}
                   type="button"
                   onClick={() => setActiveTab(item.id)}
-                  className={`w-full px-3 py-2.5 rounded-xl text-left flex items-center justify-between transition-all text-xs ${
+                  className={`w-full px-3 py-2.5 rounded-xl text-left flex items-center justify-between transition-all text-xs cursor-pointer ${
                     isActive
                       ? "bg-primary text-primary-foreground font-semibold shadow-xs"
-                      : "text-foreground hover:bg-secondary/70 font-medium"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary/70 font-medium"
                   }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div
-                      className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
-                        isActive ? "bg-white/20 text-white" : item.colorClass
-                      }`}
-                    >
-                      <Icon className="w-3.5 h-3.5" />
-                    </div>
+                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? "text-primary-foreground" : "text-muted-foreground"}`} />
                     <span className="truncate">{item.label}</span>
                   </div>
 
@@ -1344,13 +1357,10 @@ export function SettingsPageView() {
             })}
           </nav>
 
-          {/* System Relay Status Footnote */}
-          <div className="px-3 py-2 text-[10px] text-muted-foreground font-mono space-y-1">
-            <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              <span>E2EE Relay Active</span>
-            </div>
-            <div>PlexoChat Client v1.2 • Double Ratchet</div>
+          {/* System Status Footnote */}
+          <div className="px-3 py-2 text-[11px] text-muted-foreground flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            <span>End-to-end encrypted</span>
           </div>
 
         </div>
@@ -1362,11 +1372,7 @@ export function SettingsPageView() {
           <div className="flex items-center justify-between pb-3 border-b border-border/60">
             <div>
               <div className="flex items-center gap-2">
-                <div
-                  className={`w-7 h-7 rounded-lg flex items-center justify-center ${currentTabMeta.colorClass}`}
-                >
-                  <currentTabMeta.icon className="w-4 h-4" />
-                </div>
+                <currentTabMeta.icon className="w-5 h-5 text-muted-foreground" />
                 <h1 className="text-xl font-bold tracking-tight text-foreground">
                   {currentTabMeta.label}
                 </h1>

@@ -128,3 +128,46 @@ class ErrorFrame(BaseModel):
     code: str
     message: str
     client_message_id: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# WebRTC Call Signaling Frames (Signaling Only — Zero Media on Backend)
+# ---------------------------------------------------------------------------
+
+
+class IncomingCallSignalFrame(BaseModel):
+    """WebRTC signaling frame sent by client to backend for relay to a peer."""
+
+    type: Literal["call_signal"]
+    signal_type: Literal[
+        "invite",
+        "accept",
+        "decline",
+        "offer",
+        "answer",
+        "ice_candidate",
+        "end",
+        "busy",
+    ]
+    call_id: str = Field(..., min_length=1, max_length=128)
+    to_user_id: str = Field(..., min_length=1, max_length=128)
+    call_type: Literal["voice", "video"] = "voice"
+    sdp: Optional[dict] = None
+    candidate: Optional[dict] = None
+    reason: Optional[str] = None
+
+
+class OutgoingCallSignalFrame(BaseModel):
+    """WebRTC signaling frame relayed by server to the target peer."""
+
+    type: Literal["call_signal"] = "call_signal"
+    signal_type: str
+    call_id: str
+    from_user_id: str
+    caller_name: Optional[str] = None
+    caller_avatar: Optional[str] = None
+    call_type: Literal["voice", "video"] = "voice"
+    sdp: Optional[dict] = None
+    candidate: Optional[dict] = None
+    reason: Optional[str] = None
+

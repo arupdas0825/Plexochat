@@ -92,22 +92,19 @@ export function PwaInstallPrompt() {
         transition={{ type: "spring", damping: 25, stiffness: 300 }}
         className="fixed bottom-20 md:bottom-6 right-4 left-4 sm:left-auto sm:w-96 z-40 bg-card/95 backdrop-blur-md border border-border/90 rounded-2xl p-3.5 shadow-2xl flex items-center justify-between gap-3 text-xs"
       >
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center shrink-0 border border-primary/20">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center shrink-0">
             <Image
               src="/logo.png"
               alt="PlexoChat"
-              width={28}
-              height={28}
+              width={20}
+              height={20}
               className="object-contain"
             />
           </div>
           <div className="min-w-0">
-            <div className="font-bold text-foreground text-sm leading-tight truncate">
-              Install PlexoChat
-            </div>
-            <div className="text-[11px] text-muted-foreground truncate">
-              WhatsApp-grade private chat on your home screen
+            <div className="font-medium text-foreground text-xs leading-tight truncate">
+              Install PlexoChat for quick access
             </div>
           </div>
         </div>
@@ -116,15 +113,15 @@ export function PwaInstallPrompt() {
           <button
             type="button"
             onClick={handleInstallClick}
-            className="px-3 py-1.5 bg-primary text-primary-foreground font-semibold rounded-xl text-xs flex items-center gap-1.5 shadow-sm active:scale-95 touch-manipulation transition-transform"
+            className="px-2.5 py-1.5 bg-primary text-primary-foreground font-medium rounded-lg text-xs flex items-center gap-1.5 shadow-xs active:scale-95 touch-manipulation transition-transform cursor-pointer"
           >
-            {isIos ? <Share className="w-3.5 h-3.5" /> : <Download className="w-3.5 h-3.5" />}
+            {isIos ? <Share className="w-3 h-3" /> : <Download className="w-3 h-3" />}
             <span>Install</span>
           </button>
           <button
             type="button"
             onClick={handleDismiss}
-            className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg touch-manipulation"
+            className="p-1 text-muted-foreground hover:text-foreground rounded-lg transition-colors cursor-pointer touch-manipulation"
             aria-label="Dismiss install prompt"
           >
             <X className="w-4 h-4" />

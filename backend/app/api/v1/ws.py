@@ -47,8 +47,10 @@ from app.db.collections import get_connections_collection, get_pending_messages_
 from app.models.message import (
     ErrorFrame,
     IncomingAckFrame,
+    IncomingCallSignalFrame,
     IncomingMessageFrame,
     OutgoingAckRelayFrame,
+    OutgoingCallSignalFrame,
     OutgoingMessageFrame,
     PresenceFrame,
 )
@@ -300,6 +302,77 @@ async def _handle_ack_frame(
             )
 
 
+async def _handle_call_signal_frame(
+    raw: dict,
+    sender: User,
+    websocket: WebSocket,
+) -> None:
+    """Validate and relay a WebRTC 'call_signal' frame.
+
+    Zero media on backend — strictly relays JSON signaling frames (invite, accept,
+    decline, offer, answer, ice_candidate, end, busy) between ACCEPTED connections.
+    """
+    try:
+        frame = IncomingCallSignalFrame.model_validate(raw)
+    except ValidationError as exc:
+        await websocket.send_json(
+            ErrorFrame(
+                code="INVALID_FRAME",
+                message="Invalid call signal frame: " + str(exc.errors(include_url=False)),
+            ).model_dump()
+        )
+        return
+
+    # 1. Enforce accepted-connection security check
+    if not await _has_accepted_connection(sender.id, frame.to_user_id):
+        await websocket.send_json(
+            ErrorFrame(
+                code="NOT_CONNECTED",
+                message="You can only call users with whom you have an accepted connection.",
+            ).model_dump()
+        )
+        logger.warning(
+            f"WS call signal blocked: no accepted connection from={sender.id} to={frame.to_user_id}"
+        )
+        return
+
+    # 2. Check recipient online status
+    if not connection_manager.is_online(frame.to_user_id):
+        # Notify sender that peer is unavailable/offline
+        await websocket.send_json(
+            OutgoingCallSignalFrame(
+                signal_type="unavailable",
+                call_id=frame.call_id,
+                from_user_id=frame.to_user_id,
+                call_type=frame.call_type,
+                reason="peer_offline",
+            ).model_dump()
+        )
+        logger.info(
+            f"WS call signal: peer offline from={sender.id} to={frame.to_user_id} call_id={frame.call_id}"
+        )
+        return
+
+    # 3. Format and relay the signaling frame
+    outgoing = OutgoingCallSignalFrame(
+        signal_type=frame.signal_type,
+        call_id=frame.call_id,
+        from_user_id=sender.id,
+        caller_name=sender.display_name or sender.username,
+        caller_avatar=sender.photo_url,
+        call_type=frame.call_type,
+        sdp=frame.sdp,
+        candidate=frame.candidate,
+        reason=frame.reason,
+    ).model_dump()
+
+    await connection_manager.send_to_user(frame.to_user_id, outgoing)
+    logger.info(
+        f"WS call signal relayed: type={frame.signal_type} call_type={frame.call_type} "
+        f"from={sender.id} to={frame.to_user_id} call_id={frame.call_id}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Main WebSocket endpoint
 # ---------------------------------------------------------------------------
@@ -360,6 +433,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
             if frame_type == "message":
                 await _handle_message_frame(raw, user, websocket)
+            elif frame_type == "call_signal":
+                await _handle_call_signal_frame(raw, user, websocket)
             elif frame_type == "ack":
                 await _handle_ack_frame(raw, user)
             elif frame_type == "ping":

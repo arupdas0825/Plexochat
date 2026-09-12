@@ -314,16 +314,9 @@ export function ExploreWorldView() {
       {/* 1. Main Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-2 border-b border-border/60">
         <div>
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-primary/20 to-violet-500/20 border border-primary/30 flex items-center justify-center text-primary shadow-xs">
-              <Compass className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
-                <span>Explore & Connections</span>
-              </h1>
-            </div>
-          </div>
+          <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-foreground">
+            Explore & Connections
+          </h1>
           <p className="text-xs md:text-sm text-muted-foreground mt-1">
             Discover international partners on the world map, match reciprocal languages, and manage verified connections.
           </p>
@@ -332,7 +325,7 @@ export function ExploreWorldView() {
         {/* Global Live Stats Pill */}
         <div className="flex items-center gap-2">
           <div className="px-3.5 py-1.5 rounded-full bg-secondary/80 border border-border/60 text-xs font-mono font-medium text-foreground flex items-center gap-2 shadow-xs">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
             <span>{exploreUsers.length} Global Members Available</span>
           </div>
         </div>
@@ -403,11 +396,8 @@ export function ExploreWorldView() {
               transition={{ type: "spring", stiffness: 400, damping: 32 }}
             />
           )}
-          <Sparkles className="w-4 h-4 relative z-10 text-amber-500" />
+          <Languages className="w-4 h-4 relative z-10" />
           <span className="relative z-10">Language Match</span>
-          <span className="relative z-10 px-1.5 py-0.2 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[10px] font-mono font-bold">
-            Reciprocal
-          </span>
         </button>
 
         {/* Tab 4: Connection Requests */}
@@ -430,7 +420,7 @@ export function ExploreWorldView() {
           <UserPlus className="w-4 h-4 relative z-10" />
           <span className="relative z-10">Requests</span>
           {pendingIncomingCount > 0 && (
-            <span className="relative z-10 px-1.5 py-0.2 rounded-full bg-primary text-primary-foreground text-[10px] font-bold font-mono animate-pulse">
+            <span className="relative z-10 px-1.5 py-0.2 rounded-full bg-primary text-primary-foreground text-[10px] font-bold font-mono">
               {pendingIncomingCount}
             </span>
           )}
@@ -471,9 +461,8 @@ export function ExploreWorldView() {
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
-              <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-                <Globe2 className="w-4 h-4 text-primary" />
-                <span>Interactive Global Discovery Map</span>
+              <h2 className="text-base font-semibold text-foreground">
+                Interactive Global Discovery Map
               </h2>
               <p className="text-xs text-muted-foreground">
                 Click on any city cluster pin to focus on members currently available in that region.
@@ -865,28 +854,21 @@ export function ExploreWorldView() {
           <div className="p-5 sm:p-6 rounded-3xl border border-border/80 bg-gradient-to-br from-card via-card to-primary/5 space-y-4 shadow-xs">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pb-2 border-b border-border/50">
               <div>
-                <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-amber-500" />
+                <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+                  <Languages className="w-4 h-4 text-muted-foreground" />
                   <span>Reciprocal Language Partner Matching</span>
                 </h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Pair up with international speakers for tandem practice: you teach your language, they teach theirs.
                 </p>
               </div>
-              <span className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-bold font-mono text-primary flex items-center gap-1.5 self-start md:self-auto">
-                <Zap className="w-3.5 h-3.5" />
-                <span>AI Tandem Engine</span>
-              </span>
             </div>
 
             {/* Language Pair Selectors */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
               <div className="space-y-1.5 p-3.5 rounded-2xl bg-secondary/40 border border-border/60">
                 <label className="text-xs font-semibold text-foreground flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <span className="text-base">🗣</span>
-                    <span>I Speak / Can Teach:</span>
-                  </span>
+                  <span>I Speak / Can Teach:</span>
                   <span className="text-[10px] text-muted-foreground font-mono">Your Native Language</span>
                 </label>
                 <select
@@ -904,11 +886,8 @@ export function ExploreWorldView() {
 
               <div className="space-y-1.5 p-3.5 rounded-2xl bg-secondary/40 border border-border/60">
                 <label className="text-xs font-semibold text-foreground flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <span className="text-base">🎯</span>
-                    <span>I Want to Practice / Learn:</span>
-                  </span>
-                  <span className="text-[10px] text-primary font-mono font-semibold">Target Goal</span>
+                  <span>I Want to Practice / Learn:</span>
+                  <span className="text-[10px] text-muted-foreground font-mono font-medium">Target Goal</span>
                 </label>
                 <select
                   value={myLearnLang}
@@ -938,8 +917,8 @@ export function ExploreWorldView() {
 
             {matchedUsers.length === 0 ? (
               <div className="p-12 text-center rounded-3xl border border-dashed border-border/80 bg-card space-y-2">
-                <Sparkles className="w-10 h-10 mx-auto text-muted-foreground" />
-                <h3 className="text-base font-bold text-foreground">No reciprocal matches found yet</h3>
+                <Languages className="w-10 h-10 mx-auto text-muted-foreground" />
+                <h3 className="text-base font-semibold text-foreground">No reciprocal matches found yet</h3>
                 <p className="text-xs text-muted-foreground">
                   Try adjusting the language pair or exploring new members in Discover.
                 </p>
@@ -953,11 +932,7 @@ export function ExploreWorldView() {
                   return (
                     <div
                       key={match.id}
-                      className={`p-5 rounded-3xl border transition-all flex flex-col justify-between gap-4 ${
-                        match.isPerfectReciprocal
-                          ? "bg-gradient-to-br from-card via-card to-primary/10 border-primary/40 shadow-sm"
-                          : "bg-card border-border/80 hover:border-primary/30"
-                      }`}
+                      className="p-5 rounded-3xl border border-border/80 bg-card hover:border-border transition-all flex flex-col justify-between gap-4 shadow-xs"
                     >
                       <div className="space-y-3">
                         
@@ -969,13 +944,7 @@ export function ExploreWorldView() {
                           </span>
 
                           <div className="flex items-center gap-1.5">
-                            {match.isPerfectReciprocal && (
-                              <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[10px] font-bold flex items-center gap-1">
-                                <Sparkles className="w-3 h-3" />
-                                <span>Perfect Match</span>
-                              </span>
-                            )}
-                            <span className="px-2.5 py-0.5 rounded-full bg-primary/15 text-primary text-xs font-bold font-mono">
+                            <span className="px-2.5 py-0.5 rounded-full bg-secondary text-foreground text-xs font-semibold font-mono">
                               {match.dynamicScore}% Match
                             </span>
                           </div>

@@ -1,8 +1,9 @@
-const CACHE_NAME = "plexochat-v1";
+const CACHE_NAME = "plexochat-v2";
 
 const STATIC_ASSETS = [
   "/",
   "/home",
+  "/chats",
   "/manifest.json",
   "/logo.png",
   "/icon.png",
@@ -130,17 +131,44 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navigation: Network first, fallback to offline page
+  // Navigation: Fast network with cached app shell fallback for instant boot
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request).catch(() => {
-        return caches.match(request).then((cached) => {
-          if (cached) return cached;
-          return new Response(OFFLINE_HTML, {
-            headers: { "Content-Type": "text/html" },
-          });
+      (async () => {
+        const timeoutPromise = new Promise((resolve) => {
+          setTimeout(() => resolve(null), 1200);
         });
-      })
+
+        const networkPromise = fetch(request)
+          .then((response) => {
+            if (response && response.status === 200) {
+              const clone = response.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+            }
+            return response;
+          })
+          .catch(() => null);
+
+        const fastResponse = await Promise.race([networkPromise, timeoutPromise]);
+        if (fastResponse) {
+          return fastResponse;
+        }
+
+        // If network took longer than 1.2s, immediately return cached page or app shell
+        const cached = await caches.match(request);
+        if (cached) return cached;
+
+        const shell = (await caches.match("/home")) || (await caches.match("/"));
+        if (shell) return shell;
+
+        // If not cached, await the ongoing network request
+        const fallbackResponse = await networkPromise;
+        if (fallbackResponse) return fallbackResponse;
+
+        return new Response(OFFLINE_HTML, {
+          headers: { "Content-Type": "text/html" },
+        });
+      })()
     );
     return;
   }

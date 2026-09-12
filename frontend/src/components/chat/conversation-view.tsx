@@ -23,6 +23,8 @@ import {
   X,
   ShieldCheck,
   Info,
+  Phone,
+  Video,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -30,6 +32,7 @@ import { UserAvatar } from "@/components/ui/user-avatar";
 import { DropdownMenu, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { ChatThread, ChatMessage } from "@/lib/mock-chat-data";
 import { useVisualViewport } from "@/lib/use-visual-viewport";
+import { useCall } from "@/lib/call-context";
 
 interface ConversationViewProps {
   thread: ChatThread;
@@ -58,6 +61,9 @@ export function ConversationView({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const viewport = useVisualViewport();
   const participant = thread.participant;
+
+  const { startCall, callState } = useCall();
+  const isCallActive = callState !== "IDLE";
 
   const allMessages = React.useMemo(() => {
     return [...thread.messages, ...extraMessages].filter((m) => !deletedMsgIds[m.id]);
@@ -233,10 +239,10 @@ export function ConversationView({
                 <button
                   type="button"
                   onClick={() => setIsSecurityOpen((prev) => !prev)}
-                  className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                  className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                   title="View encryption details"
                 >
-                  <Lock className="w-2.5 h-2.5" />
+                  <Lock className="w-2.5 h-2.5 text-emerald-500" />
                   <span>E2EE</span>
                 </button>
 
@@ -271,15 +277,39 @@ export function ConversationView({
           <button
             type="button"
             onClick={() => setAutoTranslateEnabled((prev) => !prev)}
-            className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono transition-colors cursor-pointer border ${
+            className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer border ${
               autoTranslateEnabled
-                ? "bg-primary/10 text-primary border-primary/25"
-                : "bg-secondary text-muted-foreground border-border/70"
+                ? "bg-secondary text-foreground border-border/80"
+                : "bg-transparent text-muted-foreground border-border/50"
             }`}
             title="Toggle translation display"
           >
-            <Globe2 className="w-3 h-3" />
+            <Globe2 className="w-3 h-3 text-muted-foreground" />
             <span>{autoTranslateEnabled ? "Auto-Translate" : "Direct"}</span>
+          </button>
+
+          {/* WebRTC Voice Call Ghost Button */}
+          <button
+            type="button"
+            onClick={() => startCall(participant, "voice")}
+            disabled={isCallActive}
+            className="p-1.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+            title={`Voice call with ${participant.displayName}`}
+            aria-label="Voice call"
+          >
+            <Phone className="w-4 h-4" />
+          </button>
+
+          {/* WebRTC Video Call Ghost Button */}
+          <button
+            type="button"
+            onClick={() => startCall(participant, "video")}
+            disabled={isCallActive}
+            className="p-1.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+            title={`Video call with ${participant.displayName}`}
+            aria-label="Video call"
+          >
+            <Video className="w-4 h-4" />
           </button>
 
           <DropdownMenu

@@ -29,26 +29,21 @@ export function WorldVectorMap({
   return (
     <div className="rounded-3xl border border-border/80 bg-card/90 backdrop-blur-md overflow-hidden shadow-lg relative">
       
-      {/* Top Map Header & Privacy Pill */}
+      {/* Top Map Header & Privacy Indicator */}
       <div className="p-4 sm:p-5 border-b border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-secondary/30">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-            <Globe2 className="w-4 h-4" />
-          </div>
-          <div>
-            <h2 className="text-sm sm:text-base font-bold text-foreground">
-              Global Connection Hub
-            </h2>
-            <p className="text-[11px] text-muted-foreground">
-              Approximate city clusters of multilingual members with discovery enabled.
-            </p>
-          </div>
+        <div>
+          <h2 className="text-sm sm:text-base font-semibold text-foreground">
+            Global Connection Hub
+          </h2>
+          <p className="text-[11px] text-muted-foreground">
+            Approximate city clusters of multilingual members with discovery enabled.
+          </p>
         </div>
 
-        {/* Strict Privacy Badge */}
-        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-medium self-start sm:self-center">
+        {/* Muted Privacy Indicator */}
+        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-muted-foreground self-start sm:self-center">
           <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-          <span>Privacy Protected: Approximate clusters only</span>
+          <span>Approximate clusters only</span>
         </div>
       </div>
 

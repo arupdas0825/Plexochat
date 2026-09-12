@@ -28,12 +28,41 @@ export function AuthCard({ initialMode = "login" }: AuthCardProps) {
   const [mode, setMode] = useState<"login" | "signup">(initialMode);
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
+  const [hasCachedSession, setHasCachedSession] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        return !!localStorage.getItem("plexochat_current_user");
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  });
 
   React.useEffect(() => {
-    if (!isLoading && isAuthenticated) {
+    try {
+      const cached = localStorage.getItem("plexochat_current_user");
+      if (cached) {
+        setHasCachedSession(true);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (isAuthenticated || hasCachedSession) {
       router.replace("/home");
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, hasCachedSession, router]);
+
+  if (isAuthenticated || hasCachedSession) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full flex flex-col justify-between bg-background bg-mesh-gradient text-foreground px-4 py-6 sm:py-10 relative selection:bg-primary/20 selection:text-primary">

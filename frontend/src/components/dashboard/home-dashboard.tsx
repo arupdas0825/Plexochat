@@ -11,8 +11,7 @@ import {
   ArrowRight,
   Compass,
   Plus,
-  Sparkles,
-  ShieldCheck,
+  Globe2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -54,45 +53,37 @@ export function HomeDashboard() {
       value: threads.length.toString(),
       detail: `${threads.length} threads`,
       icon: MessageSquare,
-      iconColor: "text-indigo-500",
     },
     {
       label: "Global Connections",
       value: connections.length.toString(),
       detail: `${connections.length} connected`,
       icon: Users,
-      iconColor: "text-purple-500",
     },
     {
       label: "Languages Practiced",
       value: Math.max(uniqueLanguagesPracticed.size, 1).toString(),
       detail: uniqueLanguagesPracticed.size > 0 ? Array.from(uniqueLanguagesPracticed).slice(0, 3).join(", ") : "Direct",
       icon: Languages,
-      iconColor: "text-emerald-500",
     },
     {
       label: "Photos Shared",
       value: totalPhotosCount.toString(),
       detail: `${totalPhotosCount} encrypted`,
       icon: ImageIcon,
-      iconColor: "text-amber-500",
     },
   ];
 
   return (
     <div className="flex-1 h-full overflow-y-auto no-scrollbar p-4 md:p-6 lg:p-8 pb-28 md:pb-8 space-y-6 max-w-6xl mx-auto w-full">
-      {/* 1. Compact Header: Personalized Greeting & Quick Actions */}
+      {/* 1. Header: Personalized Greeting & Quick Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-border/70">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
-            <span>{getGreeting()}, {user?.displayName || "Friend"} 👋</span>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+            {getGreeting()}, {user?.displayName || "Friend"}
           </h1>
-          <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2">
-            <span>Your private communication dashboard.</span>
-            <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-emerald-500 font-mono">
-              <ShieldCheck className="w-3 h-3" />
-              <span>E2EE Active</span>
-            </span>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Your private communication dashboard.
           </p>
         </div>
 
@@ -103,7 +94,7 @@ export function HomeDashboard() {
               size="sm"
               className="h-8.5 px-3 text-xs font-medium rounded-xl border-border/80 gap-1.5 hover:bg-secondary cursor-pointer"
             >
-              <Compass className="w-3.5 h-3.5 text-primary" />
+              <Compass className="w-3.5 h-3.5 text-muted-foreground" />
               <span>Explore</span>
             </Button>
           </Link>
@@ -119,7 +110,7 @@ export function HomeDashboard() {
         </div>
       </div>
 
-      {/* 2. Compact Modern Stat Chips (Reduced visual weight, highly informative) */}
+      {/* 2. Restrained Unified Stat Chips (Monochrome icons, numbers carry visual weight) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
         {compactStats.map((item, idx) => {
           const Icon = item.icon;
@@ -141,8 +132,8 @@ export function HomeDashboard() {
                   </span>
                 </div>
               </div>
-              <div className="p-1.5 rounded-lg bg-secondary/80 shrink-0">
-                <Icon className={`w-4 h-4 ${item.iconColor}`} />
+              <div className="p-1.5 rounded-lg bg-secondary/60 shrink-0">
+                <Icon className="w-4 h-4 text-muted-foreground" />
               </div>
             </div>
           );
@@ -153,8 +144,8 @@ export function HomeDashboard() {
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-primary" />
-            <h2 className="text-sm font-bold text-foreground tracking-tight">
+            <MessageSquare className="w-4 h-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold text-foreground tracking-tight">
               Recent Conversations
             </h2>
             {threads.length > 0 && (
@@ -238,12 +229,12 @@ export function HomeDashboard() {
                     </p>
 
                     <div className="mt-1 flex items-center gap-2">
-                      <span className="inline-flex items-center gap-1 text-[10px] text-primary/80 font-mono">
-                        <Sparkles className="w-2.5 h-2.5" />
+                      <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground font-mono">
+                        <Globe2 className="w-2.5 h-2.5" />
                         <span>Language: {p.preferredLanguage || "Direct"}</span>
                       </span>
                       {chat.unreadCount > 0 && (
-                        <span className="px-1.5 py-0.2 rounded-full bg-primary text-white text-[9px] font-bold font-mono">
+                        <span className="px-1.5 py-0.2 rounded-full bg-primary text-primary-foreground text-[9px] font-semibold font-mono">
                           {chat.unreadCount} New
                         </span>
                       )}
@@ -255,7 +246,7 @@ export function HomeDashboard() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-8 px-2.5 text-xs text-muted-foreground group-hover:text-primary group-hover:bg-primary/10 gap-1 rounded-xl"
+                      className="h-8 px-2.5 text-xs text-muted-foreground group-hover:text-foreground group-hover:bg-secondary gap-1 rounded-xl"
                     >
                       <span className="hidden sm:inline font-medium text-xs">Open</span>
                       <ArrowRight className="w-3.5 h-3.5" />

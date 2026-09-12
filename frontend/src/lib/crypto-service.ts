@@ -18,15 +18,27 @@ import { getBackendUrl } from "./auth-context";
 let olmInitialized = false;
 let olmInitPromise: Promise<void> | null = null;
 
+export function getOlm(): any {
+  if (typeof window !== "undefined" && (window as any).Olm?.Account) {
+    return (window as any).Olm;
+  }
+  if ((Olm as any)?.default?.Account) {
+    return (Olm as any).default;
+  }
+  return Olm;
+}
+
 /**
- * Initializes the Olm WebAssembly module in the browser sandbox.
+ * Initializes the Olm WebAssembly module in the browser sandbox lazily.
  */
 export async function initOlm(): Promise<void> {
   if (typeof window === "undefined") return;
   if (olmInitialized) return;
 
   if (!olmInitPromise) {
-    olmInitPromise = Olm.init({
+    const olmLib = getOlm();
+    const initFn = olmLib.init || (Olm as any).init;
+    olmInitPromise = initFn({
       locateFile: () => "/olm.wasm",
     }).then(() => {
       olmInitialized = true;
@@ -34,7 +46,7 @@ export async function initOlm(): Promise<void> {
     });
   }
 
-  return olmInitPromise;
+  return olmInitPromise || Promise.resolve();
 }
 
 function getPickleKey(userId: string): string {
@@ -79,7 +91,8 @@ export async function getOrCreateAccount(
   const pickleKey = getPickleKey(userId);
   const storedPickle = await getCryptoKey<string>(`olm_account_${userId}`);
 
-  const account = new Olm.Account();
+  const OlmLib = getOlm();
+  const account = new OlmLib.Account();
 
   if (storedPickle) {
     try {
@@ -184,7 +197,8 @@ async function getOrInitOutboundSession(
     throw new Error("Incomplete peer key bundle returned by backend");
   }
 
-  const newSession = new Olm.Session();
+  const OlmLib = getOlm();
+  const newSession = new OlmLib.Session();
   newSession.create_outbound(account, peerIdentityCurve, peerOtk);
 
   // Persist session
@@ -237,10 +251,11 @@ export async function decryptMessage(
   const account = await getOrCreateAccount(myUserId, getIdToken);
   const pickleKey = getPickleKey(myUserId);
   const sessionKey = `${myUserId}_${peerUserId}`;
+  const OlmLib = getOlm();
 
   // 1. If message is a PreKey message (messageType === 0), it initiates or resets an Olm session
   if (messageType === 0) {
-    const session = new Olm.Session();
+    const session = new OlmLib.Session();
     session.create_inbound(account, ciphertext);
     account.remove_one_time_keys(session);
 
@@ -259,15 +274,16 @@ export async function decryptMessage(
   if (!session) {
     const storedPickle = await getCryptoKey<string>(`olm_session_${sessionKey}`);
     if (storedPickle) {
-      session = new Olm.Session();
-      session.unpickle(pickleKey, storedPickle);
-      sessionCache.set(sessionKey, session);
+      const restoredSession = new OlmLib.Session();
+      restoredSession.unpickle(pickleKey, storedPickle);
+      sessionCache.set(sessionKey, restoredSession);
+      session = restoredSession;
     }
   }
 
   if (!session) {
     // If no existing session exists, attempt inbound creation
-    const inboundSession = new Olm.Session();
+    const inboundSession = new OlmLib.Session();
     inboundSession.create_inbound(account, ciphertext);
     account.remove_one_time_keys(inboundSession);
     const plaintext = inboundSession.decrypt(messageType, ciphertext);
