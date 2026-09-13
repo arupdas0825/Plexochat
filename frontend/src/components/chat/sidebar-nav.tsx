@@ -165,7 +165,7 @@ export function SidebarNav({
       </div>
 
       {/* 3. Thread List with Clean Contextual Menu (Fix Problem 1) */}
-      <div className="flex-1 overflow-y-auto no-scrollbar momentum-scroll divide-y divide-border/40 pb-20 md:pb-4">
+      <div className="flex-1 overflow-y-auto no-scrollbar momentum-scroll divide-y divide-border/40 pb-28 md:pb-4">
         {filteredThreads.length === 0 ? (
           <EmptyState
             icon={MessageSquare}
