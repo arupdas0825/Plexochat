@@ -16,6 +16,7 @@ from app.core.config import settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import logger, request_id_ctx
 from app.db.mongo import close_mongo_connection, connect_to_mongo, ping_mongo
+from app.db.redis_client import close_redis_connection, connect_to_redis
 from app.db.collections import get_pending_messages_collection, get_conversation_preferences_collection
 from app.routers.auth import router as auth_router
 from app.routers.users import router as users_router
@@ -109,11 +110,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as e:
         logger.warning(f"Could not ensure indexes: {e}")
 
+    # 4. Initialize Redis connection if configured
+    try:
+        await connect_to_redis()
+    except Exception as e:
+        logger.warning(f"Could not connect to Redis: {e}")
+
     logger.info("PlexoChat backend started successfully.")
     yield
 
     # Shutdown
     logger.info("Shutting down PlexoChat backend services...")
+    await close_redis_connection()
     await close_mongo_connection()
     logger.info("PlexoChat backend shutdown complete.")
 

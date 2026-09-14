@@ -54,13 +54,13 @@ class IncomingMessageFrame(BaseModel):
         return v.strip()
 
     @model_validator(mode="after")
-    def sync_ciphertext_and_text(self) -> "IncomingMessageFrame":
+    def require_content(self) -> "IncomingMessageFrame":
+        """Require either ciphertext or text. Never mirror one into the other
+        server-side — doing so would cause the relay to unnecessarily duplicate
+        opaque content and masks whether the sender used E2EE or not.
+        """
         if not self.ciphertext and not self.text:
             raise ValueError("Either ciphertext or text must be provided.")
-        if not self.ciphertext and self.text:
-            self.ciphertext = self.text
-        elif not self.text and self.ciphertext:
-            self.text = self.ciphertext
         return self
 
 
@@ -85,6 +85,14 @@ class IncomingReadFrame(BaseModel):
         return self
 
 
+class IncomingTypingFrame(BaseModel):
+    """Transient typing indicator frame sent by client to notify peer."""
+
+    type: Literal["typing"]
+    to_user_id: str = Field(..., min_length=1, max_length=128)
+    is_typing: bool = True
+
+
 # ---------------------------------------------------------------------------
 # Outgoing frames (server → client)
 # ---------------------------------------------------------------------------
@@ -93,24 +101,17 @@ class IncomingReadFrame(BaseModel):
 class OutgoingMessageFrame(BaseModel):
     """Message relayed from sender to recipient.
 
-    E2EE: contains opaque `ciphertext` and `message_type` — no plaintext ever.
-    `text` is also populated with the ciphertext for backward-compatibility.
+    E2EE contract: only `ciphertext` and `message_type` are relayed.
+    The `text` field is NEVER populated on outgoing frames — it existed
+    only as a backward-compat alias and has been removed from the relay
+    path to prevent accidental plaintext exposure.
     """
 
     type: Literal["message"] = "message"
     from_user_id: str
     ciphertext: Optional[str] = None
-    text: Optional[str] = None
     message_type: int = 0
     client_message_id: str
-
-    @model_validator(mode="after")
-    def sync_outgoing(self) -> "OutgoingMessageFrame":
-        if self.ciphertext and not self.text:
-            self.text = self.ciphertext
-        elif self.text and not self.ciphertext:
-            self.ciphertext = self.text
-        return self
 
 
 class OutgoingAckRelayFrame(BaseModel):
@@ -127,6 +128,14 @@ class OutgoingReadRelayFrame(BaseModel):
     client_message_id: Optional[str] = None
     client_message_ids: Optional[List[str]] = None
     reader_id: str
+
+
+class OutgoingTypingFrame(BaseModel):
+    """Transient typing indicator relayed to peer."""
+
+    type: Literal["typing"] = "typing"
+    from_user_id: str
+    is_typing: bool
 
 
 class PresenceFrame(BaseModel):

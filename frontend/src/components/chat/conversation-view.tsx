@@ -662,10 +662,10 @@ export function ConversationView({
           />
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer shrink-0"
-            title="Share encrypted photo"
-            aria-label="Add attachment"
+            disabled
+            className="p-2 rounded-xl text-muted-foreground/40 cursor-not-allowed shrink-0"
+            title="Encrypted photo sharing (coming in next release)"
+            aria-label="Add attachment (currently inactive)"
           >
             <Paperclip className="w-4 h-4" />
           </button>

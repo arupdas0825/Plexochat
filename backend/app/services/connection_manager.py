@@ -1,28 +1,27 @@
-"""In-memory WebSocket connection manager.
+"""WebSocket connection and presence manager with Redis-backed distributed state.
 
 Holds a process-local mapping of user_id -> set of active WebSocket connections
-(supporting multiple tabs/devices per user).
-
-⚠️  SCALABILITY NOTE:
-This implementation is intentionally in-memory only and is correct for a single
-backend instance (which is the current deployment model). When PlexoChat scales
-to multiple backend instances, this must be replaced with a Redis-backed presence
-and pub/sub layer so that messages can be routed across instances. At that point,
-`send_to_user` should publish to a Redis channel keyed by user_id, and each
-instance should subscribe to deliver to its locally connected sockets.
+(supporting multiple tabs/devices per user), synchronized with Redis presence keys.
+When Redis is unavailable or unconfigured, it degrades seamlessly to in-memory tracking.
 """
 
 import asyncio
 from collections import defaultdict
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import WebSocket
 
 from app.core.logging import logger
+from app.db.redis_client import (
+    clear_user_presence,
+    is_user_present_redis,
+    refresh_user_presence,
+    set_user_presence,
+)
 
 
 class ConnectionManager:
-    """Thread-safe (asyncio-safe) in-memory WebSocket registry."""
+    """Thread-safe (asyncio-safe) WebSocket registry with distributed Redis presence."""
 
     def __init__(self) -> None:
         # user_id -> set of active WebSocket connections
@@ -34,21 +33,33 @@ class ConnectionManager:
     # ------------------------------------------------------------------
 
     async def connect(self, user_id: str, websocket: WebSocket) -> None:
-        """Register a new WebSocket connection for user_id."""
+        """Register a new WebSocket connection for user_id and sync Redis presence."""
         async with self._lock:
             self._connections[user_id].add(websocket)
-        logger.info(
-            f"WS connect: user_id={user_id} "
-            f"total_connections={len(self._connections[user_id])}"
-        )
+            total = len(self._connections[user_id])
+
+        # Mark user present in Redis (TTL = 60s, refreshed by client pings)
+        await set_user_presence(user_id, ttl_seconds=60)
+
+        logger.info(f"WS connect: user_id={user_id} total_connections={total}")
 
     async def disconnect(self, user_id: str, websocket: WebSocket) -> None:
-        """Remove a WebSocket connection for user_id. Cleans up empty sets."""
+        """Remove a WebSocket connection for user_id. Cleans up Redis key if offline."""
         async with self._lock:
             self._connections[user_id].discard(websocket)
-            if not self._connections[user_id]:
+            has_remaining = bool(self._connections[user_id])
+            if not has_remaining:
                 del self._connections[user_id]
+
+        if not has_remaining:
+            # Clear presence key in Redis immediately
+            await clear_user_presence(user_id)
+
         logger.info(f"WS disconnect: user_id={user_id}")
+
+    async def heartbeat(self, user_id: str, ttl_seconds: int = 60) -> None:
+        """Extends the Redis presence TTL on client ping/heartbeat."""
+        await refresh_user_presence(user_id, ttl_seconds=ttl_seconds)
 
     # ------------------------------------------------------------------
     # Message delivery
@@ -94,11 +105,20 @@ class ConnectionManager:
     # ------------------------------------------------------------------
 
     def is_online(self, user_id: str) -> bool:
-        """Returns True if user_id has at least one active WebSocket connection."""
+        """Returns True if user_id has at least one active local WebSocket connection."""
         return bool(self._connections.get(user_id))
 
+    async def is_online_async(self, user_id: str) -> bool:
+        """Checks local connections first, falling back to Redis for multi-instance deployments."""
+        if bool(self._connections.get(user_id)):
+            return True
+        redis_online = await is_user_present_redis(user_id)
+        if redis_online is not None:
+            return redis_online
+        return False
+
     def online_users(self) -> set[str]:
-        """Returns the set of all currently-connected user IDs."""
+        """Returns the set of all currently-connected user IDs on this instance."""
         return set(self._connections.keys())
 
 

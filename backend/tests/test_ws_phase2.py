@@ -175,7 +175,8 @@ async def test_ws_message_delivery_online(db_and_users):
             # B should receive the message
             frame = _recv(ws_b, expected_type="message")
             assert frame["type"] == "message", f"Expected 'message', got {frame}"
-            assert frame["text"] == "Hello from pytest A!"
+            # E2EE contract: frame carries payload in ciphertext
+            assert (frame.get("ciphertext") or frame.get("text")) == "Hello from pytest A!"
             assert frame["from_user_id"] == id_a
             assert frame["client_message_id"] == client_msg_id
 
@@ -392,3 +393,27 @@ async def test_ws_read_relayed_to_sender(db_and_users):
 
     print("\n  ✓ test_ws_read_relayed_to_sender passed")
 
+
+@pytest.mark.asyncio(loop_scope="module")
+async def test_ws_typing_indicator_relayed(db_and_users):
+    """Typing indicator frame from A is relayed to B in real-time."""
+    id_a, id_b = db_and_users
+    await _ensure_connection(id_a, id_b, "ACCEPTED")
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        with client.websocket_connect(f"{WS_PATH}?token={_token(USER_A_UID)}") as ws_a, \
+             client.websocket_connect(f"{WS_PATH}?token={_token(USER_B_UID)}") as ws_b:
+
+            # A sends typing frame
+            ws_a.send_json({
+                "type": "typing",
+                "to_user_id": id_b,
+                "is_typing": True,
+            })
+
+            typing_frame = _recv(ws_b, expected_type="typing")
+            assert typing_frame["type"] == "typing"
+            assert typing_frame["from_user_id"] == id_a
+            assert typing_frame["is_typing"] is True
+
+    print("\n  ✓ test_ws_typing_indicator_relayed passed")

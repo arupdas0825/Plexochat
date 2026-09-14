@@ -269,6 +269,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       pcRef.current.ontrack = null;
       pcRef.current.onicecandidate = null;
       pcRef.current.oniceconnectionstatechange = null;
+      pcRef.current.onconnectionstatechange = null;
       pcRef.current.close();
       pcRef.current = null;
     }
@@ -395,6 +396,25 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
           setErrorMessage("Connection lost. Direct P2P could not be established.");
           cleanUpCallResources();
           setTimeout(() => setCallState("IDLE"), 3000);
+        }
+      };
+
+      pc.onconnectionstatechange = () => {
+        if (!pc) return;
+        const state = pc.connectionState;
+        if (state === "connected") {
+          setCallState("CONNECTED");
+          tonePlayer.stop();
+        } else if (state === "disconnected") {
+          setCallState("RECONNECTING");
+        } else if (state === "failed") {
+          setCallState("FAILED");
+          setErrorMessage("Call connection failed.");
+          cleanUpCallResources();
+          setTimeout(() => setCallState("IDLE"), 3000);
+        } else if (state === "closed") {
+          cleanUpCallResources();
+          setCallState("IDLE");
         }
       };
 

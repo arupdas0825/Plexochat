@@ -72,11 +72,17 @@ export const getBackendUrl = (): string => {
       return DEFAULT_PROD_API_URL;
     }
 
-    // Local development (localhost / 127.0.0.1)
+    // Local development (localhost / 127.0.0.1 / LAN)
     if (configured) {
-      return configured.replace(/\/$/, "");
+      const trimmed = configured.replace(/\/$/, "");
+      // If accessing from another device/mobile on local network (e.g. 192.168.x.x), replace localhost with device IP
+      if (window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+        return trimmed.replace("localhost", window.location.hostname).replace("127.0.0.1", window.location.hostname);
+      }
+      return trimmed;
     }
-    return "http://localhost:8000";
+    const currentHost = window.location.hostname || "localhost";
+    return `http://${currentHost}:8000`;
   }
 
   // SSR environment
@@ -117,11 +123,16 @@ export const getWebSocketUrl = (path: string = "/api/v1/ws"): string => {
       return normalizePath(wsUrl, cleanPath);
     }
 
-    // Local development
+    // Local development / LAN
     if (configuredWs) {
-      return normalizePath(configuredWs, cleanPath);
+      let resolvedWs = configuredWs;
+      if (window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+        resolvedWs = resolvedWs.replace("localhost", window.location.hostname).replace("127.0.0.1", window.location.hostname);
+      }
+      return normalizePath(resolvedWs, cleanPath);
     }
-    return `ws://localhost:8000${cleanPath}`;
+    const currentHost = window.location.hostname || "localhost";
+    return `ws://${currentHost}:8000${cleanPath}`;
   }
 
   if (configuredWs) {
@@ -272,13 +283,17 @@ async function syncUserToBackend(fbUser: FirebaseUser): Promise<BackendSyncRespo
   try {
     const token = await fbUser.getIdToken();
     const backendUrl = getBackendUrl();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 7000);
+
     const res = await fetch(`${backendUrl}/api/v1/auth/sync`, {
       method: "POST",
+      signal: controller.signal,
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-    });
+    }).finally(() => clearTimeout(timer));
     if (!res.ok) {
       const body = await res.text();
       console.warn("[PlexoChat] Backend sync failed:", res.status, body);
@@ -463,6 +478,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               if (changed) {
                 saveRegisteredUser(updated);
                 localStorage.setItem("plexochat_current_user", JSON.stringify(updated));
+                localStorage.setItem(`plexochat_user_${fbUser.uid}`, JSON.stringify(updated));
+                localStorage.setItem(`plexochat_user_${updated.id}`, JSON.stringify(updated));
                 return updated;
               }
               return prev;

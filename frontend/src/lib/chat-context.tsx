@@ -22,7 +22,13 @@ import {
   encryptMessage,
   decryptMessage,
   DecryptedPayload,
+  getIdentityFingerprint,
 } from "./crypto-service";
+
+export type ConnectionState = "connected" | "connecting" | "reconnecting" | "offline";
+
+// Re-export so consumers don't need to import from crypto-service
+export { getIdentityFingerprint };
 import {
   saveMessage,
   getThreadMessages,
@@ -37,6 +43,7 @@ interface ChatContextType {
   threads: ChatThread[];
   activeThreadId: string | null;
   unreadTotal: number;
+  connectionState: ConnectionState;
   selectThread: (id: string | null) => void;
   sendMessage: (
     threadId: string,
@@ -64,7 +71,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const { connections, refreshConnections } = useConnections();
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [connectionState, setConnectionState] = useState<ConnectionState>("connecting");
   const wsRef = useRef<WebSocket | null>(null);
+  const isConnectingRef = useRef(false);
+  const reconnectAttemptRef = useRef(0);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const userRef = useRef(user);
   useEffect(() => {
@@ -228,8 +240,18 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       });
 
       setThreads(mergedThreads);
+      if (user?.id) {
+        saveUserThreads(user.id, mergedThreads);
+        try {
+          localStorage.setItem(`plexochat_threads_${user.id}`, JSON.stringify(mergedThreads));
+        } catch {
+          // ignore
+        }
+      }
       setActiveThreadId((prev) =>
-        mergedThreads.length > 0 && !prev ? mergedThreads[0].id : prev
+        mergedThreads.length > 0 && !prev && typeof window !== "undefined" && window.innerWidth >= 768
+          ? mergedThreads[0].id
+          : prev
       );
     }
 
@@ -268,39 +290,108 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     };
   }, [activeThreadId]);
 
-  // Connect to WebSocket relay
+  // -------------------------------------------------------------------
+  // WebSocket connection with production-grade reconnection logic
+  // -------------------------------------------------------------------
+  // Reconnection parameters:
+  //   base delay : 1 000 ms
+  //   multiplier : 1.5x per attempt
+  //   max delay  : 30 000 ms
+  //   jitter     : ±20% (multiply by 0.8..1.2)
+  //   ceiling    : 8 consecutive failures → "offline"; re-armed by online/visibility events
+  const RECONNECT_BASE_MS = 1000;
+  const RECONNECT_MAX_MS = 30000;
+  const RECONNECT_MAX_ATTEMPTS = 8;
+
   useEffect(() => {
     if (!firebaseUser || !user) {
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
       }
+      setConnectionState("offline");
       return;
     }
 
     let isSubscribed = true;
     let socket: WebSocket | null = null;
-    let reconnectTimeout: NodeJS.Timeout | null = null;
-    let pingInterval: NodeJS.Timeout | null = null;
-    let backoffDelay = 1500;
+
+    const clearPing = () => {
+      if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+        pingIntervalRef.current = null;
+      }
+    };
+
+    const clearReconnectTimer = () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+    };
+
+    const scheduleReconnect = () => {
+      if (!isSubscribed) return;
+
+      const attempt = reconnectAttemptRef.current;
+      if (attempt >= RECONNECT_MAX_ATTEMPTS) {
+        // Give up retrying; wait for OS "online" or visibility event to re-arm
+        setConnectionState("offline");
+        console.warn(
+          `[PlexoChat WS] Gave up after ${attempt} attempts — waiting for network restore`
+        );
+        return;
+      }
+
+      // Exponential backoff with ±20% jitter
+      const base = RECONNECT_BASE_MS * Math.pow(1.5, attempt);
+      const capped = Math.min(base, RECONNECT_MAX_MS);
+      const jittered = capped * (0.8 + Math.random() * 0.4);
+      const delay = Math.round(jittered);
+
+      reconnectAttemptRef.current = attempt + 1;
+      setConnectionState(attempt === 0 ? "connecting" : "reconnecting");
+
+      console.info(
+        `[PlexoChat WS] Reconnect attempt ${attempt + 1}/${RECONNECT_MAX_ATTEMPTS} in ${delay}ms`
+      );
+      clearReconnectTimer();
+      reconnectTimeoutRef.current = setTimeout(connectWebSocket, delay);
+    };
 
     const connectWebSocket = async () => {
+      // Concurrency guard — skip if a connection is already in flight
+      if (isConnectingRef.current) return;
+      if (!isSubscribed) return;
+
+      isConnectingRef.current = true;
       try {
         const token = await firebaseUser.getIdToken();
-        if (!isSubscribed) return;
+        if (!isSubscribed) { isConnectingRef.current = false; return; }
 
         const wsBase = getWebSocketUrl();
         const fullWsUrl = `${wsBase}?token=${encodeURIComponent(token)}`;
+
+        // Close any stale socket before opening a new one
+        if (socket && socket.readyState !== WebSocket.CLOSED) {
+          socket.onclose = null; // Prevent the old onclose from scheduling another reconnect
+          socket.close();
+        }
+
         socket = new WebSocket(fullWsUrl);
         wsRef.current = socket;
+        setConnectionState("connecting");
 
         socket.onopen = () => {
+          if (!isSubscribed) { socket?.close(); return; }
           console.info("[PlexoChat WS] Connected to message relay");
-          backoffDelay = 1500; // Reset backoff on successful connect
+          reconnectAttemptRef.current = 0; // Reset backoff counter on success
+          isConnectingRef.current = false;
+          setConnectionState("connected");
 
-          // Start 25s keep-alive heartbeat ping to prevent Render idle timeout (55s)
-          if (pingInterval) clearInterval(pingInterval);
-          pingInterval = setInterval(() => {
+          // 25 s keep-alive heartbeat (prevents Render 55 s idle timeout)
+          clearPing();
+          pingIntervalRef.current = setInterval(() => {
             if (socket && socket.readyState === WebSocket.OPEN) {
               socket.send(JSON.stringify({ type: "ping" }));
             }
@@ -313,14 +404,31 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
             if (data.type === "message") {
               const fromUserId = data.from_user_id;
-              let originalText = data.text || "";
-              let translatedText = data.text || "";
+              const incomingClientId: string | undefined = data.client_message_id;
+              let originalText = "";
+              let translatedText = "";
               let originalLang = "English";
               let targetLangCode = "EN";
               let isPhoto = false;
               let photoUrl: string | undefined = undefined;
 
-              // E2EE Decryption flow (if ciphertext envelope is present)
+              // ── Duplicate detection ─────────────────────────────────────────
+              // Prevents showing the same message twice across reconnect races.
+              if (incomingClientId) {
+                const threadId = `chat-${fromUserId}`;
+                const existingThread = threads.find(
+                  (t) => t.id === threadId || t.participant.id === fromUserId
+                );
+                if (existingThread?.messages.some((m) => m.id === incomingClientId)) {
+                  // Already have this message — just ensure ack is sent
+                  if (socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({ type: "ack", client_message_id: incomingClientId }));
+                  }
+                  return;
+                }
+              }
+
+              // ── E2EE Decryption ─────────────────────────────────────────────
               const currentUserId = userRef.current?.id || user.id;
               if (data.ciphertext) {
                 try {
@@ -343,15 +451,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                     "[PlexoChat WS] E2EE decryption warning for incoming message:",
                     decErr
                   );
-                  // If text was also present, fallback gracefully to text
-                  if (data.text) {
-                    originalText = data.text;
-                    translatedText = data.text;
-                  } else {
-                    translatedText = "[Encrypted Message - Key Synchronizing]";
-                    originalText = "[Encrypted Message - Key Synchronizing]";
-                  }
+                  // If ciphertext failed and there's no text fallback, show placeholder
+                  translatedText = "[Encrypted Message — Keys Synchronizing]";
+                  originalText = "[Encrypted Message — Keys Synchronizing]";
                 }
+              } else {
+                // Legacy non-E2EE path (shouldn't happen in production, kept for dev)
+                originalText = data.text || "";
+                translatedText = data.text || "";
               }
 
               const newMsg: ChatMessage = {
@@ -519,36 +626,74 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           }
         };
 
-        socket.onclose = () => {
-          if (pingInterval) clearInterval(pingInterval);
-          console.info(`[PlexoChat WS] Closed — reconnecting in ${backoffDelay}ms`);
-          if (isSubscribed) {
-            reconnectTimeout = setTimeout(connectWebSocket, backoffDelay);
-            backoffDelay = Math.min(backoffDelay * 1.5, 8000);
-          }
+        socket.onclose = (event) => {
+          isConnectingRef.current = false;
+          clearPing();
+          if (!isSubscribed) return;
+          console.info(
+            `[PlexoChat WS] Closed (code=${event.code}) — scheduling reconnect`
+          );
+          scheduleReconnect();
         };
 
-        socket.onerror = (err) => {
-          console.warn("[PlexoChat WS] Socket error:", err);
+        socket.onerror = () => {
+          // onclose will fire immediately after onerror, so let onclose drive reconnect
+          isConnectingRef.current = false;
         };
       } catch (err) {
-        if (pingInterval) clearInterval(pingInterval);
+        isConnectingRef.current = false;
+        clearPing();
         console.warn("[PlexoChat WS] Connection error:", err);
-        if (isSubscribed) {
-          reconnectTimeout = setTimeout(connectWebSocket, backoffDelay);
-          backoffDelay = Math.min(backoffDelay * 1.5, 8000);
-        }
+        if (isSubscribed) scheduleReconnect();
       }
     };
 
     connectWebSocket();
 
+    // ── OS-level re-connection triggers ──────────────────────────────────
+    const handleVisibilityChange = () => {
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState === "visible" &&
+        isSubscribed &&
+        (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN)
+      ) {
+        console.info("[PlexoChat WS] Tab became visible — triggering reconnect");
+        reconnectAttemptRef.current = 0; // Reset ceiling so we try again fresh
+        clearReconnectTimer();
+        connectWebSocket();
+      }
+    };
+
+    const handleOnline = () => {
+      if (isSubscribed && (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN)) {
+        console.info("[PlexoChat WS] Network came online — triggering reconnect");
+        reconnectAttemptRef.current = 0;
+        clearReconnectTimer();
+        connectWebSocket();
+      }
+    };
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", handleOnline);
+    }
+
     return () => {
       isSubscribed = false;
-      if (reconnectTimeout) clearTimeout(reconnectTimeout);
-      if (pingInterval) clearInterval(pingInterval);
-      if (socket) socket.close();
+      clearReconnectTimer();
+      clearPing();
+      if (socket && socket.readyState !== WebSocket.CLOSED) socket.close();
       wsRef.current = null;
+      isConnectingRef.current = false;
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      }
+      if (typeof window !== "undefined") {
+        window.removeEventListener("online", handleOnline);
+      }
     };
   }, [firebaseUser?.uid, user?.id]);
 
@@ -728,6 +873,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
 
     // 4. Dispatch over WebSocket
+    // ── Phase 0 security fix ────────────────────────────────────────────────
+    // When ciphertext is present, ONLY ciphertext is sent — plaintext is
+    // NEVER included in the wire frame so the relay never sees message content.
+    // The `text` field is only included as a last-resort legacy fallback when
+    // Olm encryption failed entirely (e.g. peer has no device keys yet).
     let sendStatus: "sent" | "failed" = "failed";
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -735,12 +885,19 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         const frame: Record<string, unknown> = {
           type: "message",
           to_user_id: thread.participant.id,
-          text: text,
           client_message_id: clientMsgId,
         };
+
         if (ciphertext) {
+          // E2EE path: only opaque ciphertext on the wire
           frame.ciphertext = ciphertext;
           frame.message_type = messageType;
+        } else {
+          // Fallback: no encryption available (key exchange pending)
+          // Include plaintext as `text` so the backend can still relay it.
+          // This path should be temporary — Olm session will be established
+          // on the next successful key exchange.
+          frame.text = text;
         }
 
         wsRef.current.send(JSON.stringify(frame));
@@ -987,6 +1144,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         threads,
         activeThreadId,
         unreadTotal,
+        connectionState,
         selectThread,
         sendMessage,
         startChatWithUser,

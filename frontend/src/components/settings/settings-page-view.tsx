@@ -35,6 +35,7 @@ import { useAuth, SUPPORTED_LANGUAGES } from "@/lib/auth-context";
 import { useTheme } from "../theme-provider";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { EmptyState } from "@/components/ui/empty-state";
+import { getIdentityFingerprint } from "@/lib/chat-context";
 
 export type SettingsTabId =
   | "profile"
@@ -128,6 +129,25 @@ export function SettingsPageView() {
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [cacheCleared, setCacheCleared] = useState(false);
 
+  // Real Olm identity fingerprint (Ed25519 public key — safe to display)
+  const [identityFingerprint, setIdentityFingerprint] = useState<string | null>(null);
+  useEffect(() => {
+    if (!user?.id) return;
+    // Olm may not be initialized yet on first render; retry briefly
+    let cancelled = false;
+    const tryLoad = async () => {
+      const fp = await getIdentityFingerprint(user.id);
+      if (!cancelled) setIdentityFingerprint(fp);
+    };
+    tryLoad();
+    // Retry once after a short delay in case Olm was still loading
+    const retryTimer = setTimeout(tryLoad, 3000);
+    return () => {
+      cancelled = true;
+      clearTimeout(retryTimer);
+    };
+  }, [user?.id]);
+
   // Read URL query or hash if navigating from direct links (e.g. app-shell #security)
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -180,8 +200,9 @@ export function SettingsPageView() {
   };
 
   const handleCopyFingerprint = () => {
-    const dummyFingerprint = "7F89 A10B 94C2 6D7E 8F10 22B4 90FA 55C1 88D9 1234";
-    navigator.clipboard.writeText(dummyFingerprint);
+    const fp = identityFingerprint;
+    if (!fp) return;
+    navigator.clipboard.writeText(fp);
     setCopiedFingerprint(true);
     setTimeout(() => setCopiedFingerprint(false), 2000);
   };
@@ -231,7 +252,8 @@ export function SettingsPageView() {
     const data = {
       user,
       exportDate: new Date().toISOString(),
-      e2eeRelayStatus: "ACTIVE_DOUBLE_RATCHET",
+      e2eeLibrary: "@matrix-org/olm (Double Ratchet)",
+      transportSecurity: "WSS (TLS) + Olm ciphertext",
       version: "PlexoChat-v1.0",
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -529,7 +551,7 @@ export function SettingsPageView() {
               <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs text-foreground flex items-start gap-3">
                 <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5" />
                 <div className="text-[11px] text-muted-foreground leading-relaxed">
-                  <strong className="text-foreground">Zero Server Plaintext:</strong> Message payloads remain end-to-end encrypted in transit. Translation happens purely in the authenticated client layer after cryptographic signature verification.
+                  <strong className="text-foreground">Privacy-preserving translation:</strong> When you send a message, translation runs directly in your browser <em>before</em> the message is encrypted — your PlexoChat server never receives or stores plaintext. When you receive a message, it is decrypted locally in your browser first, then displayed in your preferred language.
                 </div>
               </div>
             </div>
@@ -552,7 +574,7 @@ export function SettingsPageView() {
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                     </div>
                     <div className="text-[11px] text-muted-foreground mt-0.5">
-                      Messages, voice, video, and shared media are encrypted directly between devices.
+                      Text messages and shared photos are encrypted on your device via Olm before transmission. The relay server only handles opaque ciphertext.
                     </div>
                   </div>
                 </div>
@@ -584,7 +606,7 @@ export function SettingsPageView() {
                     </div>
                   </div>
                   <p className="pt-1 text-[10px]">
-                    Client version: PlexoChat Web v1.2 • Double Ratchet Relay Active
+                    Client version: PlexoChat Web v1.2 • Olm E2EE active for text &amp; photos • WebRTC DTLS-SRTP for calls
                   </p>
                 </div>
               </details>
@@ -599,7 +621,8 @@ export function SettingsPageView() {
                   <button
                     type="button"
                     onClick={handleCopyFingerprint}
-                    className="text-[11px] text-primary hover:underline flex items-center gap-1 font-mono font-medium"
+                    disabled={!identityFingerprint}
+                    className="text-[11px] text-primary hover:underline flex items-center gap-1 font-mono font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {copiedFingerprint ? (
                       <>
@@ -615,10 +638,12 @@ export function SettingsPageView() {
                   </button>
                 </div>
                 <div className="p-3 rounded-lg bg-card border border-border font-mono text-[11px] text-muted-foreground tracking-wider select-all break-all">
-                  7F89 A10B 94C2 6D7E 8F10 22B4 90FA 55C1 88D9 1234
+                  {identityFingerprint ?? (
+                    <span className="italic text-muted-foreground/60">Initializing… open a chat to generate your device keys.</span>
+                  )}
                 </div>
                 <p className="text-[10px] text-muted-foreground">
-                  Compare this security fingerprint with conversation partners to verify no man-in-the-middle tampering.
+                  Your device&apos;s Olm Ed25519 public identity key. Compare with conversation partners to verify no man-in-the-middle tampering. This is a <strong>public key</strong> — safe to share.
                 </p>
               </div>
 

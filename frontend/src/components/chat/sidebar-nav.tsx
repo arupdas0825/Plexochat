@@ -15,6 +15,7 @@ import {
   Trash2,
   X,
   Globe2,
+  Wifi,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -23,6 +24,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ChatThread } from "@/lib/mock-chat-data";
 import { useConnections } from "@/lib/connections-context";
 import { formatMessageTime } from "@/lib/utils";
+import { useChat } from "@/lib/chat-context";
 
 interface SidebarNavProps {
   threads: ChatThread[];
@@ -42,6 +44,7 @@ export function SidebarNav({
   setSearchQuery,
 }: SidebarNavProps) {
   const { pendingIncomingCount } = useConnections();
+  const { connectionState } = useChat();
   const [mutedThreads, setMutedThreads] = useState<Record<string, boolean>>({});
   const [archivedThreads, setArchivedThreads] = useState<Record<string, boolean>>({});
   const [deletedThreads, setDeletedThreads] = useState<Record<string, boolean>>({});
@@ -163,6 +166,32 @@ export function SidebarNav({
           )}
         </div>
       </div>
+
+      {/* Connection State Banner — hidden when connected */}
+      {connectionState !== "connected" && connectionState !== "connecting" && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`px-3 py-2 flex items-center gap-2 text-[11px] font-medium shrink-0 border-b ${
+            connectionState === "offline"
+              ? "bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400"
+              : "bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-400"
+          }`}
+        >
+          <span
+            className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+              connectionState === "offline"
+                ? "bg-red-500"
+                : "bg-amber-500 animate-pulse"
+            }`}
+          />
+          <span>
+            {connectionState === "offline"
+              ? "You’re offline — messages will sync when reconnected"
+              : "Reconnecting to server…"}
+          </span>
+        </div>
+      )}
 
       {/* 3. Thread List with Clean Contextual Menu (Fix Problem 1) */}
       <div className="flex-1 overflow-y-auto no-scrollbar momentum-scroll divide-y divide-border/40 pb-28 md:pb-4">

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import {
   DiscoverableUser,
   StoredConnectionRequest,
@@ -200,8 +200,16 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
     }
   }, [firebaseUser, user?.id, authFetch]);
 
+  const isFetchingRef = useRef<boolean>(false);
+
   const refreshConnections = useCallback(async () => {
-    await Promise.all([fetchConnections(), fetchRequests()]);
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+    try {
+      await Promise.all([fetchConnections(), fetchRequests()]);
+    } finally {
+      isFetchingRef.current = false;
+    }
   }, [fetchConnections, fetchRequests]);
 
   // Load in background when user / firebaseUser is ready

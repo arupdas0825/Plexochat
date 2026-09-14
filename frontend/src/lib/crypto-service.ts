@@ -301,3 +301,39 @@ export async function decryptMessage(
 
   return JSON.parse(plaintext);
 }
+
+/**
+ * Returns the user's Olm Ed25519 identity key as a formatted fingerprint string.
+ *
+ * The Ed25519 key is a PUBLIC key — it is safe to display. Private keys never leave
+ * IndexedDB and are never accessible via this function.
+ *
+ * Returns null if the Olm account has not been initialized yet for this user.
+ * Format: "AB12 CD34 EF56 GH78 IJ90 KL12 MN34 OP56 QR78 ST90"
+ */
+export async function getIdentityFingerprint(userId: string): Promise<string | null> {
+  try {
+    const account = accountCache.get(userId);
+    if (!account) return null;
+
+    const identityKeys = JSON.parse(account.identity_keys()) as {
+      curve25519: string;
+      ed25519: string;
+    };
+
+    const ed25519Key = identityKeys.ed25519;
+    if (!ed25519Key) return null;
+
+    // Convert base64 Ed25519 key bytes to hex, then group into 4-char blocks
+    const binary = atob(ed25519Key);
+    const hex = Array.from(binary)
+      .map((c) => c.charCodeAt(0).toString(16).padStart(2, "0"))
+      .join("")
+      .toUpperCase();
+
+    // Group into blocks of 4, take first 10 blocks (40 hex chars = 20 bytes)
+    return hex.match(/.{1,4}/g)?.slice(0, 10).join(" ") ?? hex;
+  } catch {
+    return null;
+  }
+}

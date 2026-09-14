@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     # Google Cloud Translation API (server-side only — never exposed to frontend)
     GOOGLE_TRANSLATE_API_KEY: Optional[str] = None
 
+    # Redis Configuration (Optional - Presence & Distributed Pub/Sub)
+    REDIS_URL: Optional[str] = None
+
     # MongoDB Atlas
     MONGODB_URI: str = "mongodb://localhost:27017"
     MONGODB_DATABASE: str = "PlexoChat"

@@ -43,17 +43,23 @@ from pydantic import ValidationError
 from app.core.errors import AuthenticationError
 from app.core.logging import logger
 from app.core.security import authenticate_websocket
-from app.db.collections import get_connections_collection, get_pending_messages_collection
+from app.db.collections import (
+    get_connections_collection,
+    get_pending_messages_collection,
+    get_users_collection,
+)
 from app.models.message import (
     ErrorFrame,
     IncomingAckFrame,
     IncomingCallSignalFrame,
     IncomingMessageFrame,
     IncomingReadFrame,
+    IncomingTypingFrame,
     OutgoingAckRelayFrame,
     OutgoingCallSignalFrame,
     OutgoingMessageFrame,
     OutgoingReadRelayFrame,
+    OutgoingTypingFrame,
     PresenceFrame,
 )
 from app.models.user import User
@@ -134,12 +140,11 @@ async def _flush_pending_messages(user: User, websocket: WebSocket) -> None:
     col = get_pending_messages_collection()
     cursor = col.find({"to_user_id": user.id}, sort=[("created_at", 1)])
     async for doc in cursor:
-        ciphertext = doc.get("ciphertext") or doc.get("text", "")
-        text = doc.get("text") or doc.get("ciphertext", "")
+        # Pending docs only store ciphertext (plaintext is never persisted)
+        ciphertext = doc.get("ciphertext")
         frame = OutgoingMessageFrame(
             from_user_id=doc["from_user_id"],
             ciphertext=ciphertext,
-            text=text,
             message_type=doc.get("message_type", 0),
             client_message_id=doc["client_message_id"],
         ).model_dump()
@@ -173,13 +178,11 @@ async def _handle_offline_recipient(
         {
             "from_user_id": sender.id,
             "to_user_id": frame.to_user_id,
+            # Only ciphertext stored — plaintext is NEVER persisted on the backend.
             "ciphertext": frame.ciphertext or frame.text,
-            "text": frame.text or frame.ciphertext,
             "message_type": frame.message_type,
             "client_message_id": frame.client_message_id,
             "created_at": datetime.now(timezone.utc),
-            # NOTE: no plaintext, no translated text, no language metadata stored here.
-            # All semantic content is inside the encrypted payload decrypted by the recipient.
         }
     )
     logger.info(
@@ -239,8 +242,7 @@ async def _handle_message_frame(
 
     outgoing = OutgoingMessageFrame(
         from_user_id=sender.id,
-        ciphertext=frame.ciphertext,
-        text=frame.text,
+        ciphertext=frame.ciphertext or frame.text,  # legacy fallback: text-only senders
         message_type=frame.message_type,
         client_message_id=frame.client_message_id,
     ).model_dump()
@@ -338,6 +340,32 @@ async def _handle_read_frame(
             logger.info(
                 f"WS read relay: from={recipient.id} to peer={peer_id}"
             )
+
+
+async def _handle_typing_frame(
+    raw: dict,
+    sender: User,
+) -> None:
+    """Validate and relay a transient typing indicator to the target peer.
+
+    Typing state is never persisted — it is strictly an ephemeral UI signal
+    relayed only between users who have an ACCEPTED connection.
+    """
+    try:
+        frame = IncomingTypingFrame.model_validate(raw)
+    except ValidationError:
+        return
+
+    # Enforce accepted connection check
+    if not await _has_accepted_connection(sender.id, frame.to_user_id):
+        return
+
+    relay_frame = OutgoingTypingFrame(
+        from_user_id=sender.id,
+        is_typing=frame.is_typing,
+    ).model_dump()
+
+    await connection_manager.send_to_user(frame.to_user_id, relay_frame)
 
 
 async def _handle_call_signal_frame(
@@ -477,7 +505,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 await _handle_ack_frame(raw, user)
             elif frame_type == "read":
                 await _handle_read_frame(raw, user)
+            elif frame_type == "typing":
+                await _handle_typing_frame(raw, user)
             elif frame_type == "ping":
+                await connection_manager.heartbeat(user.id)
                 await websocket.send_json({"type": "pong"})
             else:
                 await websocket.send_json(
@@ -496,6 +527,14 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         await connection_manager.disconnect(user.id, websocket)
         if not connection_manager.is_online(user.id):
             await _broadcast_presence(user, "offline")
+            try:
+                users_col = get_users_collection()
+                await users_col.update_one(
+                    {"$or": [{"_id": user.id}, {"id": user.id}]},
+                    {"$set": {"last_seen": datetime.now(timezone.utc)}},
+                )
+            except Exception as exc:
+                logger.warning(f"Failed to update last_seen for user_id={user.id}: {exc}")
             logger.info(f"User is now offline, broadcasted presence: user_id={user.id}")
         else:
             logger.info(f"WS disconnected but user still has active sockets: user_id={user.id}")
