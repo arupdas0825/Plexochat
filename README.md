@@ -11,8 +11,8 @@
 <br/>
 
 [![License](https://img.shields.io/badge/license-Proprietary-red.svg?style=flat-square)](./LICENSE.md)
-[![Status](https://img.shields.io/badge/status-MVP%20in%20development-yellow.svg?style=flat-square)](./phases.md)
-[![Encryption](https://img.shields.io/badge/encryption-E2EE-6366f1.svg?style=flat-square)](./architecture.md)
+[![Status](https://img.shields.io/badge/status-Live%20in%20Production-brightgreen.svg?style=flat-square)](https://plexochat.vercel.app)
+[![Encryption](https://img.shields.io/badge/encryption-E2EE%20(Olm%2FSignal)-6366f1.svg?style=flat-square)](./Docs/architecture.md)
 [![Trademark](https://img.shields.io/badge/trademark-PlexoChat™-black.svg?style=flat-square)](./TRADEMARK.md)
 
 [![Next.js](https://img.shields.io/badge/Next.js-000000?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org/)
@@ -21,7 +21,6 @@
 [![Firebase](https://img.shields.io/badge/Firebase%20Auth-FFCA28?style=flat-square&logo=firebase&logoColor=black)](https://firebase.google.com/)
 [![MongoDB Atlas](https://img.shields.io/badge/MongoDB%20Atlas-47A248?style=flat-square&logo=mongodb&logoColor=white)](https://www.mongodb.com/atlas)
 [![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat-square&logo=redis&logoColor=white)](https://redis.io/)
-[![Cloudflare R2](https://img.shields.io/badge/Cloudflare%20R2-F38020?style=flat-square&logo=cloudflare&logoColor=white)](https://www.cloudflare.com/developer-platform/r2/)
 
 <br/>
 
@@ -45,11 +44,7 @@
 
 PlexoChat is a private, 1-to-1, end-to-end encrypted messenger. Users write however comes naturally to them — mixed languages, romanized script, slang, emojis — and PlexoChat automatically translates every message into the recipient's preferred language, in the background, without breaking conversational flow.
 
-It is intentionally **not** a general-purpose social network. It's a focused messaging product, with real-time translation and end-to-end encryption as first-class citizens rather than bolted-on features.
-
-### The Problem
-
-Two people who want to talk often don't share a language. The usual workarounds — finding a common language or copy-pasting into a separate translator — interrupt natural conversation. PlexoChat removes that friction: type naturally, and the platform handles translation automatically, in both directions, for both participants.
+PlexoChat is deliberately focused: it's a multilingual chat product built around real, natural conversation — with the language exposure that comes from it as a genuine (if secondary) benefit. It is **not** a general-purpose social network, and it deliberately does not carry file/photo sharing, group chats, or public feeds — see [`Docs/prd.md`](./Docs/prd.md) for the full scope rationale.
 
 <br/>
 
@@ -57,25 +52,24 @@ Two people who want to talk often don't share a language. The usual workarounds 
 
 | | |
 |---|---|
-| 💬 **Real-time messaging** | 1-to-1 text chat over WebSocket (WSS) |
+| 💬 **Real-time messaging** | 1-to-1 text chat over an authenticated WebSocket connection |
 | 🌍 **Automatic translation** | Every message is translated, targeted at the *receiver's* preferred language |
 | 🔁 **Original-message reveal** | Double-click/double-tap to see the source text — plus an accessible "View original" control. The original is never overwritten |
-| 🔒 **End-to-end encryption** | Applied to both text and photos |
-| 🖼️ **Encrypted photo sharing** | The server only ever handles ciphertext |
+| 🔒 **Real end-to-end encryption** | Signal-style double-ratchet E2EE via the audited Olm protocol (`@matrix-org/olm`) — private keys never leave the device |
+| ✅ **Read receipts** | WhatsApp-style delivery/read ticks, colored on read |
+| 🟢 **Live presence** | Redis-backed online/offline status, resilient across reconnects |
+| 📞 **Voice & video calls** | 1-to-1 WebRTC calls, signaled through the existing WebSocket layer — media never touches the backend |
 | 🤝 **Consent-based connections** | Messaging requires an explicit request + acceptance — no unsolicited contact |
+| 👤 **Rich profiles** | Bio, spoken/learning languages, and interests, surfaced in a dedicated Chat Info panel |
+| ⏳ **Disappearing messages** | Optional per-conversation auto-expiry |
 | 📱 **Fully responsive** | Polished on desktop and mobile web alike |
 | 🧠 **Natural multilingual input** | Mixed languages, romanized script (e.g. Banglish), slang, emojis — no manual "select a language" step |
-| 🎓 **Language learning, as a side effect** | A natural byproduct of real conversation exposure — not the core pitch, not a built MVP feature |
 
 <details>
-<summary><strong>🚫 Not in the MVP</strong> (click to expand)</summary>
+<summary><strong>🚫 Deliberately out of scope</strong> (click to expand)</summary>
 <br/>
 
-To stay focused, the following are explicitly out of scope for the initial release:
-
-Voice calls · Video calls · Group chats · Channels · Stories/status · Public feed · Payments · Stickers as a core feature · General file sharing · Public social features · Language-partner discovery · In-app "Learn" mode · PWA packaging (see [roadmap](#-roadmap)) · Multi-device sessions
-
-See [`prd.md`](./prd.md) for the full rationale and the post-MVP roadmap.
+Photo/file sharing, group chats, channels, stories/status, public feed, payments, stickers as a core feature, public social features, language-partner discovery, an in-app "Learn" mode, PWA packaging, and multi-device sessions are all intentionally out of scope. PlexoChat's focus is real, natural, private 1-to-1 conversation — not a broader social platform. See [`Docs/prd.md`](./Docs/prd.md) and [`Docs/memory.md`](./Docs/memory.md) for the full rationale, including why photo sharing was specifically considered and then removed from scope.
 
 </details>
 
@@ -87,16 +81,16 @@ See [`prd.md`](./prd.md) for the full rationale and the post-MVP roadmap.
 Sender types naturally (any language/script mix)
         │
         ▼
-Local language detection + translation   (on-device)
+Local translation, targeted at the recipient's preferred language
         │
         ▼
-Local encryption                          (E2EE)
+Local end-to-end encryption (Olm double ratchet)
         │
         ▼
-Ciphertext relayed over WSS via the server
+Ciphertext relayed over an authenticated WebSocket
         │
         ▼
-Receiver decrypts locally
+Recipient decrypts locally
         │
         ▼
 Translated message displayed to BOTH sender and receiver
@@ -105,7 +99,7 @@ Translated message displayed to BOTH sender and receiver
 Original always recoverable via double-click/tap or "View original"
 ```
 
-> The server never needs plaintext messages, plaintext photos, or private encryption keys — it operates as a coordination and encrypted-relay service only.
+> The backend never needs plaintext messages or private encryption keys — it authenticates, relays ciphertext, and coordinates presence/connections. It is not a permanent chat-history archive: undelivered messages are held only temporarily and deleted once delivered or once a retention window expires. Real conversation history lives in encrypted storage on your own device.
 
 <br/>
 
@@ -120,12 +114,12 @@ Original always recoverable via double-click/tap or "View original"
 | **Authentication** | Firebase Authentication |
 | **Database** | MongoDB Atlas |
 | **Real-time / Presence** | WebSocket + Redis |
-| **Photo Storage** | Cloudflare R2 |
-| **End-to-End Encryption** | Browser-side Web Crypto + an established cryptographic protocol/library |
+| **End-to-End Encryption** | Olm (Signal-style double ratchet) via `@matrix-org/olm`, Web Crypto, IndexedDB for local key storage |
+| **Calling** | WebRTC (DTLS-SRTP media, STUN/TURN), signaled over the existing WebSocket |
 
 </div>
 
-> 🔒 **Final, locked stack** for implementation. Full rationale in [`architecture.md`](./architecture.md).
+Full rationale in [`Docs/architecture.md`](./Docs/architecture.md).
 
 <br/>
 
@@ -133,32 +127,26 @@ Original always recoverable via double-click/tap or "View original"
 
 ```
 ┌────────────────────────┐                ┌─────────────────────────────────────────┐
-│     User A Browser     │    WSS/HTTPS   │              FastAPI Backend              │
-│  React · Next.js        │◄──────────────►│  Verifies Firebase ID tokens               │
-│  Local Translation       │                │  User Discovery · Connection State          │
-│  E2EE / Web Crypto        │                │  Encrypted Relay · Delivery State             │
-└────────────────────────┘                │  Presigned R2 Upload/Download URLs             │
+│     User A Browser     │  WSS (auth'd)  │              FastAPI Backend              │
+│  Local Translation       │◄──────────────►│  Verifies Firebase ID tokens               │
+│  Olm E2EE / Web Crypto     │               │  User Discovery · Connection State          │
+│  WebRTC (calls)              │             │  Encrypted Relay · Read Receipts · Presence   │
+└────────────────────────┘                │  WebRTC Signaling Only (no media)               │
                                             └───────┬─────────────┬─────────────┬─────────┘
 ┌────────────────────────┐                          │             │             │
-│     User B Browser     │    WSS/HTTPS              ▼             ▼             ▼
-│  React · Next.js        │◄──────────────┐   ┌───────────┐ ┌────────────┐ ┌────────────┐
-│  Local Translation       │               │   │ Firebase   │ │  MongoDB   │ │   Redis     │
-│  E2EE / Web Crypto        │               │   │ Auth       │ │  Atlas     │ │ (presence,  │
+│     User B Browser     │  WSS (auth'd)             ▼             ▼             ▼
+│  Local Translation       │◄──────────────┐   ┌───────────┐ ┌────────────┐ ┌────────────┐
+│  Olm E2EE / Web Crypto     │              │   │ Firebase   │ │  MongoDB   │ │   Redis     │
+│  WebRTC (calls)              │            │   │ Auth       │ │  Atlas     │ │ (presence,  │
 └────────────────────────┘               │   └───────────┘ │(users,conns│ │ rate limits)│
-                                           │                 │ msg/photo  │ └────────────┘
-                                           │                 │ metadata)  │
-                                           │                 └─────┬──────┘
-                                           │                       ▼
-                                           │                ┌──────────────┐
-                                           └───────────────►│ Cloudflare R2 │
-                                                             │ (encrypted    │
-                                                             │  photo blobs) │
-                                                             └──────────────┘
+                                           │                 │ device keys│ └────────────┘
+                                           └─────────────────│ pending msg│
+                                                              └────────────┘
 ```
 
-The backend is deliberately narrow in scope: **verifying identity, user discovery, connection state, encrypted relay, and delivery state** — nothing more. It never needs plaintext messages, plaintext photos, or private keys.
+The backend is deliberately narrow in scope: **verifying identity, user discovery, connection state, encrypted relay, presence, and WebRTC signaling** — nothing more. It never needs plaintext messages, plaintext media, or private encryption keys.
 
-📄 Full data model, encryption design, and the E2EE-vs-cloud-translation privacy tradeoff → [`architecture.md`](./architecture.md)
+📄 Full data model, encryption design, and messaging architecture → [`Docs/architecture.md`](./Docs/architecture.md)
 
 <br/>
 
@@ -166,16 +154,16 @@ The backend is deliberately narrow in scope: **verifying identity, user discover
 
 Security is designed in from the start, not bolted on.
 
-- 🔑 **No custom cryptography** — established, well-maintained libraries/protocols only
-- 🌐 **Local-first translation** — preserves genuine end-to-end encryption; server-side plaintext translation would break the E2EE guarantee
-- 🚦 **Tiered rate limiting** — auth / public / authenticated tiers, per-IP + per-account limits, exponential backoff, all thresholds configurable
-- ✅ **Strict input validation** — reject non-conforming data rather than sanitize-and-continue
-- 🙈 **No hardcoded secrets** — environment variables only, verified not to leak into the frontend bundle or git history
-- 📦 **Routine dependency audits** — across frontend and backend, with tracked remediation
-- 🧯 **Generic user-facing errors** — no stack traces, file paths, or raw database errors ever reach the client
-- 🖼️ **Validated, isolated file uploads** — real content/type checks, size limits, private object storage, no execution vector
+- 🔑 **Real E2EE** — Signal-style double-ratchet encryption via the audited Olm protocol, not a placeholder. Identity keys and one-time prekeys are exchanged through the backend (public key material only); private keys are generated and stored exclusively on-device in IndexedDB and never leave it.
+- 🌐 **Local-first translation** — translation happens before encryption, on the client, to preserve the E2EE guarantee.
+- 📵 **Store-and-forward, not a chat archive** — the backend holds undelivered ciphertext only temporarily (deleted on delivery or after a retention TTL); it is not a permanent message database.
+- 🚦 **Tiered rate limiting** — stricter limits on auth-adjacent routes, moderate on public/search endpoints, looser on authenticated actions.
+- ✅ **Strict input validation** — reject non-conforming data rather than sanitize-and-continue.
+- 🙈 **No hardcoded secrets** — environment variables only, verified not to leak into the frontend bundle or git history.
+- 🧯 **Generic user-facing errors** — no stack traces, file paths, or raw database errors ever reach the client.
+- 📞 **Calls never touch the backend** — WebRTC media flows peer-to-peer (or via TURN relay when needed); the backend only ever carries signaling messages (offer/answer/ICE/call state).
 
-> PlexoChat does **not** claim to be "100% secure," "unbreakable," or "impossible to hack." Full control specification in [`security.md`](./security.md); cryptographic design and threat-model caveats in [`architecture.md`](./architecture.md).
+> PlexoChat does **not** claim to be "100% secure," "unbreakable," or "impossible to hack." Full control specification in [`Docs/security.md`](./Docs/security.md); cryptographic design and threat-model caveats in [`Docs/architecture.md`](./Docs/architecture.md).
 
 <br/>
 
@@ -183,12 +171,12 @@ Security is designed in from the start, not bolted on.
 
 | Document | Description |
 |:---|:---|
-| 📋 [`prd.md`](./prd.md) | Product requirements — scope, features, success criteria |
-| 🎨 [`design.md`](./design.md) | UX/UI design — layouts, translation interaction, accessibility |
-| 🏗️ [`architecture.md`](./architecture.md) | Technical architecture, data model, E2EE design |
-| 🗺️ [`phases.md`](./phases.md) | MVP development roadmap, phase by phase |
-| 🔐 [`security.md`](./security.md) | Full security control specification |
-| 🧠 [`memory.md`](./memory.md) | Durable decisions log and glossary |
+| 📋 [`Docs/prd.md`](./Docs/prd.md) | Product requirements — scope, features, success criteria |
+| 🎨 [`Docs/design.md`](./Docs/design.md) | UX/UI design — layouts, translation interaction, accessibility |
+| 🏗️ [`Docs/architecture.md`](./Docs/architecture.md) | Technical architecture, data model, E2EE design |
+| 🗺️ [`Docs/phases.md`](./Docs/phases.md) | Development roadmap, phase by phase |
+| 🔐 [`Docs/security.md`](./Docs/security.md) | Full security control specification |
+| 🧠 [`Docs/memory.md`](./Docs/memory.md) | Durable decisions log, glossary, and production status |
 | ⚖️ [`LICENSE.md`](./LICENSE.md) | Software license terms |
 | ™️ [`TRADEMARK.md`](./TRADEMARK.md) | Trademark and brand usage policy |
 
@@ -196,26 +184,25 @@ Security is designed in from the start, not bolted on.
 
 ## 🚀 Getting Started
 
-> ⚠️ PlexoChat is currently in active MVP development — see [`phases.md`](./phases.md). Setup below assumes the locked stack above and will evolve as implementation progresses.
+> PlexoChat is live in production. The instructions below are for running it locally.
 
 <details>
 <summary><strong>Prerequisites</strong></summary>
 <br/>
 
-- Node.js (LTS) and npm/pnpm/yarn
+- Node.js (LTS) and npm
 - Python 3.11+
 - A Firebase project (Authentication enabled)
 - A MongoDB Atlas cluster
-- Redis
-- A Cloudflare R2 bucket + API token
+- Redis (local or hosted)
 
 </details>
 
 **1. Clone the repository**
 
 ```bash
-git clone https://github.com/[your-org]/plexochat.git
-cd plexochat
+git clone https://github.com/arupdas0825/Plexochat.git
+cd Plexochat
 ```
 
 **2. Backend setup**
@@ -240,21 +227,23 @@ npm run dev
 
 **4. Environment variables**
 
-All secrets are supplied via environment variables — never hardcoded. This includes: the Firebase Admin SDK service account key (backend only — distinct from the public Firebase client config used by the frontend), the MongoDB Atlas connection string, the Redis connection string, Cloudflare R2 access key/secret, and rate-limit thresholds.
+All secrets are supplied via environment variables — never hardcoded. This includes the Firebase Admin SDK service account key (backend only — distinct from the public Firebase client config used by the frontend), the MongoDB Atlas connection string, the Redis connection string, and rate-limit thresholds. See `.env.example` in each directory for the required keys, and [`Docs/security.md`](./Docs/security.md) §3 for the full secrets-handling checklist.
 
-📄 See `.env.example` in each directory for required keys, and [`security.md`](./security.md) §3 for the full secrets-handling checklist.
+<br/>
+
+## 🌐 Deployment
+
+| | |
+|:---|:---|
+| **Frontend** | [Vercel](https://plexochat.vercel.app) |
+| **Backend** | Render (FastAPI, `uvicorn`) |
+| **Database** | MongoDB Atlas |
 
 <br/>
 
 ## 🗺️ Roadmap
 
-<div align="center">
-
-`1` UI Prototype → `2` Accounts & Connections → `3` Real-Time Messaging → `4` Translation → `5` End-to-End Encryption → `6` Encrypted Photos → `7` Security Testing → `8` UX Polish
-
-</div>
-
-Full detail, exit criteria, and per-phase security work → [`phases.md`](./phases.md)
+Built incrementally: UI foundations → Accounts & Connections → Real-Time Messaging → Translation → End-to-End Encryption → Presence & Read Receipts → Voice/Video Calls → Security Hardening → UX Polish. Full detail and per-phase notes → [`Docs/phases.md`](./Docs/phases.md)
 
 <br/>
 
@@ -280,7 +269,7 @@ PlexoChat is **proprietary, closed-source software**. It is not licensed under M
 
 ## 📬 Contact
 
-For licensing, trademark, security disclosures, or general inquiries: **[arupworks.at@gmail.com]**
+For licensing, trademark, security disclosures, or general inquiries, contact **Arup Das**.
 
 ---
 
