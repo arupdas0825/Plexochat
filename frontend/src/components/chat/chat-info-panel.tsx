@@ -535,7 +535,7 @@ export function ChatInfoPanel({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <ImageIcon className="w-4 h-4 text-muted-foreground" />
-                <h4 className="text-xs font-medium text-foreground">Media & photos</h4>
+                <h4 className="text-xs font-medium text-foreground">Media & files</h4>
               </div>
               <span className="text-[11px] font-mono text-muted-foreground">
                 {sharedMedia.length}
@@ -559,7 +559,7 @@ export function ChatInfoPanel({
               </div>
             ) : (
               <p className="text-xs text-muted-foreground/70 italic pt-1">
-                No media shared in this chat yet.
+                No media shared in this chat yet. PlexoChat is architected for text-first encrypted messaging with zero cloud media persistence.
               </p>
             )}
           </div>

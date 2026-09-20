@@ -225,9 +225,20 @@ export function ConversationView({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+    const enterToSend = typeof window !== "undefined"
+      ? localStorage.getItem("plexochat_enter_to_send") !== "false"
+      : true;
+
+    if (enterToSend) {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSend();
+      }
+    } else {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        handleSend();
+      }
     }
   };
 
@@ -367,7 +378,7 @@ export function ConversationView({
                           <span>End-to-End Encrypted</span>
                         </div>
                         <p className="text-muted-foreground text-[11px] leading-relaxed">
-                          Messages and media in this chat are encrypted client-side via the Olm Double-Ratchet protocol. Only your device and {participant.displayName}&apos;s device have the decryption keys.
+                          Messages in this chat are encrypted client-side via the Olm Double-Ratchet protocol. Only your device and {participant.displayName}&apos;s device have the decryption keys.
                         </p>
                         <div className="pt-1 text-[10px] text-muted-foreground font-mono">
                           Target Language: {participant.preferredLanguage || "Direct"}
@@ -507,16 +518,29 @@ export function ConversationView({
                   tabIndex={0}
                   role="button"
                   title="Double click/tap to toggle original text"
-                  className={`relative rounded-2xl px-3 py-2 sm:px-3.5 sm:py-2.5 text-sm transition-all select-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring ${
+                  className={`relative rounded-2xl px-3.5 py-2.5 text-sm transition-all select-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring ${
                     isMe
                       ? isOriginalShown
                         ? "bg-primary/20 text-foreground border border-primary/35 rounded-br-xs shadow-xs"
                         : "bg-primary text-primary-foreground rounded-br-xs shadow-xs"
                       : isOriginalShown
                         ? "bg-secondary text-foreground border border-border rounded-bl-xs shadow-xs"
-                        : "bg-card text-foreground border border-border/80 rounded-bl-xs shadow-xs"
+                        : "bg-[#1C232D] dark:bg-[#1C232D] text-foreground border border-border/60 rounded-bl-xs shadow-xs"
                   }`}
                 >
+                  {/* Mockup caption line above translated text: (Translated to {language}) */}
+                  {hasTranslation && !isOriginalShown && autoTranslateEnabled && (
+                    <div
+                      className={`text-[10px] tracking-tight mb-1 flex items-center gap-1 font-medium select-none ${
+                        isMe ? "text-primary-foreground/80" : "text-muted-foreground/90"
+                      }`}
+                    >
+                      <span>
+                        (Translated to {msg.targetLangCode ? msg.targetLangCode.toUpperCase() : "English"})
+                      </span>
+                    </div>
+                  )}
+
                   {/* Subtle Original tag if revealed */}
                   {isOriginalShown && (
                     <div className="text-[10px] font-mono font-semibold uppercase tracking-wider mb-1 opacity-75 flex items-center gap-1">
@@ -649,29 +673,30 @@ export function ConversationView({
         )}
       </AnimatePresence>
 
-      {/* 5. Fixed Message Composer */}
+      {/* 5. Fixed Message Composer (Clean text-first layout per Section 4) */}
       <div className="p-2.5 sm:p-3 bg-card border-t border-border/80 z-20 shrink-0 select-none pb-[max(0.65rem,env(safe-area-inset-bottom))]">
         <div className="flex items-end gap-1.5 sm:gap-2 max-w-4xl mx-auto">
-          {/* Photo / Attachment trigger */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={() => {}}
-          />
+          {/* Inline Translation Quick Toggle */}
           <button
             type="button"
-            disabled
-            className="p-2 rounded-xl text-muted-foreground/40 cursor-not-allowed shrink-0"
-            title="Encrypted photo sharing (coming in next release)"
-            aria-label="Add attachment (currently inactive)"
+            onClick={() => setAutoTranslateEnabled((prev) => !prev)}
+            className={`p-2 rounded-xl transition-colors shrink-0 cursor-pointer ${
+              autoTranslateEnabled
+                ? "text-primary bg-primary/10 hover:bg-primary/20"
+                : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+            }`}
+            title={
+              autoTranslateEnabled
+                ? "Auto-translate active (tap to pause)"
+                : "Auto-translate paused (tap to enable)"
+            }
+            aria-label="Toggle auto-translate"
           >
-            <Paperclip className="w-4 h-4" />
+            <Globe2 className="w-4 h-4" />
           </button>
 
           {/* Textarea Input */}
-          <div className="flex-1 relative min-h-[38px] rounded-2xl bg-secondary/50 border border-border/80 focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-ring transition-colors flex items-center px-3 py-1">
+          <div className="flex-1 relative min-h-[38px] rounded-2xl bg-secondary/50 border border-border/80 focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/40 transition-colors flex items-center px-3 py-1">
             <textarea
               ref={textareaRef}
               value={inputText}
@@ -684,12 +709,12 @@ export function ConversationView({
             />
           </div>
 
-          {/* Send Action */}
+          {/* Send Action (Teal Accent Button) */}
           <Button
             size="sm"
             onClick={handleSend}
             disabled={!inputText.trim() || isEncrypting}
-            className="h-9 w-9 p-0 rounded-xl shadow-xs shrink-0 cursor-pointer disabled:opacity-40"
+            className="h-9 w-9 p-0 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs shrink-0 cursor-pointer disabled:opacity-40 transition-all"
             title="Send encrypted message"
             aria-label="Send message"
           >

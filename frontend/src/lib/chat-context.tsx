@@ -72,6 +72,39 @@ interface ChatContextType {
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
+function playMessageNotificationChime() {
+  if (typeof window === "undefined") return;
+  try {
+    const soundAllowed = localStorage.getItem("plexochat_sound_enabled") !== "false";
+    if (!soundAllowed) return;
+
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    const ctx = new AudioContextClass();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(880, ctx.currentTime); // A5
+    osc.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.08); // E6
+
+    gain.gain.setValueAtTime(0.06, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.12);
+    setTimeout(() => {
+      ctx.close().catch(() => {});
+    }, 250);
+  } catch {
+    // AudioContext blocked by browser autoplay policy until user gesture
+  }
+}
+
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const { user, firebaseUser } = useAuth();
   const { connections, refreshConnections } = useConnections();
@@ -504,6 +537,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                   return th;
                 });
                 saveUserThreads(currentUserId, updated);
+                playMessageNotificationChime();
                 return updated;
               });
 
@@ -526,12 +560,17 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                   typeof document !== "undefined" &&
                   document.visibilityState === "visible"
                 ) {
-                  socket.send(
-                    JSON.stringify({
-                      type: "read",
-                      client_message_id: data.client_message_id,
-                    })
-                  );
+                  const readReceiptsAllowed = typeof window !== "undefined"
+                    ? localStorage.getItem("plexochat_read_receipts") !== "false"
+                    : true;
+                  if (readReceiptsAllowed) {
+                    socket.send(
+                      JSON.stringify({
+                        type: "read",
+                        client_message_id: data.client_message_id,
+                      })
+                    );
+                  }
                 }
               }
             } else if (data.type === "ack_relay" || data.type === "delivered") {

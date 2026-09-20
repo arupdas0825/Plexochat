@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Home,
   MessageSquare,
+  Phone,
   Compass,
   Calendar,
   Settings,
@@ -78,19 +79,8 @@ export function AppShell({ children }: AppShellProps) {
     };
   }, []);
 
+  // 4-tab primary navigation: Chats, Calls, Explore, Settings
   const navItems = [
-    {
-      label: "Home",
-      href: "/home",
-      icon: Home,
-      badge: null,
-    },
-    {
-      label: "Explore",
-      href: "/explore",
-      icon: Compass,
-      badge: pendingIncomingCount > 0 ? pendingIncomingCount : null,
-    },
     {
       label: "Chats",
       href: "/chats",
@@ -98,10 +88,16 @@ export function AppShell({ children }: AppShellProps) {
       badge: unreadTotal > 0 ? unreadTotal : null,
     },
     {
-      label: "Calendar",
-      href: "/calendar",
-      icon: Calendar,
+      label: "Calls",
+      href: "/calls",
+      icon: Phone,
       badge: null,
+    },
+    {
+      label: "Explore",
+      href: "/explore",
+      icon: Compass,
+      badge: pendingIncomingCount > 0 ? pendingIncomingCount : null,
     },
     {
       label: "Settings",
@@ -167,8 +163,8 @@ export function AppShell({ children }: AppShellProps) {
               const Icon = item.icon;
               const isActive =
                 pathname === item.href ||
-                (item.href === "/home" && pathname === "/") ||
-                (item.href !== "/home" && pathname?.startsWith(item.href));
+                (item.href === "/chats" && (pathname === "/" || pathname === "/home")) ||
+                (pathname?.startsWith(item.href) && item.href !== "/");
 
               return (
                 <Link

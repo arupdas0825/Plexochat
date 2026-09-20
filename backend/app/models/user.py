@@ -18,6 +18,11 @@ class UserBase(BaseModel):
     spoken_languages: list[str] = Field(default_factory=list, max_length=15)
     learning_languages: list[str] = Field(default_factory=list, max_length=15)
     interests: list[str] = Field(default_factory=list, max_length=20)
+    app_language: Optional[str] = Field(default="en", min_length=2, max_length=10)
+    auto_translate_enabled: Optional[bool] = Field(default=True)
+    read_receipts_enabled: Optional[bool] = Field(default=True)
+    enter_to_send: Optional[bool] = Field(default=True)
+    sound_enabled: Optional[bool] = Field(default=True)
 
     @field_validator("username")
     @classmethod
@@ -32,6 +37,14 @@ class UserBase(BaseModel):
     @field_validator("preferred_receiving_language")
     @classmethod
     def validate_language(cls, v: str) -> str:
+        result = _validate_language_code(v)
+        return result if result is not None else "en"
+
+    @field_validator("app_language")
+    @classmethod
+    def validate_app_language(cls, v: Optional[str]) -> Optional[str]:
+        if not v:
+            return "en"
         result = _validate_language_code(v)
         return result if result is not None else "en"
 
@@ -63,6 +76,11 @@ class UserUpdate(BaseModel):
     spoken_languages: Optional[list[str]] = Field(None, max_length=15)
     learning_languages: Optional[list[str]] = Field(None, max_length=15)
     interests: Optional[list[str]] = Field(None, max_length=20)
+    app_language: Optional[str] = Field(None, min_length=2, max_length=10)
+    auto_translate_enabled: Optional[bool] = Field(None)
+    read_receipts_enabled: Optional[bool] = Field(None)
+    enter_to_send: Optional[bool] = Field(None)
+    sound_enabled: Optional[bool] = Field(None)
 
     @field_validator("display_name")
     @classmethod
@@ -73,6 +91,11 @@ class UserUpdate(BaseModel):
     @classmethod
     def validate_language(cls, v: Optional[str]) -> Optional[str]:
         return _validate_language_code(v)
+
+    @field_validator("app_language")
+    @classmethod
+    def validate_app_language_update(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_language_code(v) if v else None
 
 
 class UserPublic(BaseModel):

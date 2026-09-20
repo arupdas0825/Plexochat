@@ -164,6 +164,11 @@ export interface UserProfile {
   plexoChatId: string;
   preferredReceivingLanguage: string;
   preferredLanguageName: string;
+  appLanguage?: string;
+  autoTranslateEnabled?: boolean;
+  readReceiptsEnabled?: boolean;
+  enterToSend?: boolean;
+  soundEnabled?: boolean;
   avatarUrl?: string;
   avatarBg?: string;
   city?: string;
@@ -269,6 +274,11 @@ interface BackendSyncResponse {
   spoken_languages?: string[];
   learning_languages?: string[];
   interests?: string[];
+  app_language?: string;
+  auto_translate_enabled?: boolean;
+  read_receipts_enabled?: boolean;
+  enter_to_send?: boolean;
+  sound_enabled?: boolean;
 }
 
 /**
@@ -469,6 +479,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 updated.interests = syncData.interests;
                 changed = true;
               }
+              if (syncData.app_language && updated.appLanguage !== syncData.app_language) {
+                updated.appLanguage = syncData.app_language;
+                changed = true;
+              }
+              if (syncData.auto_translate_enabled !== undefined && updated.autoTranslateEnabled !== syncData.auto_translate_enabled) {
+                updated.autoTranslateEnabled = syncData.auto_translate_enabled;
+                changed = true;
+              }
+              if (syncData.read_receipts_enabled !== undefined && updated.readReceiptsEnabled !== syncData.read_receipts_enabled) {
+                updated.readReceiptsEnabled = syncData.read_receipts_enabled;
+                changed = true;
+              }
+              if (syncData.enter_to_send !== undefined && updated.enterToSend !== syncData.enter_to_send) {
+                updated.enterToSend = syncData.enter_to_send;
+                changed = true;
+              }
+              if (syncData.sound_enabled !== undefined && updated.soundEnabled !== syncData.sound_enabled) {
+                updated.soundEnabled = syncData.sound_enabled;
+                changed = true;
+              }
 
               if (changed) {
                 saveRegisteredUser(updated);
@@ -665,6 +695,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (partial.languagesSpoken !== undefined) patchBody.spoken_languages = partial.languagesSpoken;
         if (partial.languagesLearning !== undefined) patchBody.learning_languages = partial.languagesLearning;
         if (partial.interests !== undefined) patchBody.interests = partial.interests;
+        if (partial.appLanguage !== undefined) {
+          patchBody.app_language = partial.appLanguage;
+          localStorage.setItem("plexochat_app_language", partial.appLanguage);
+        }
+        if (partial.autoTranslateEnabled !== undefined) {
+          patchBody.auto_translate_enabled = partial.autoTranslateEnabled;
+          localStorage.setItem("plexochat_auto_translate", String(partial.autoTranslateEnabled));
+        }
+        if (partial.readReceiptsEnabled !== undefined) {
+          patchBody.read_receipts_enabled = partial.readReceiptsEnabled;
+          localStorage.setItem("plexochat_read_receipts", String(partial.readReceiptsEnabled));
+        }
+        if (partial.enterToSend !== undefined) {
+          patchBody.enter_to_send = partial.enterToSend;
+          localStorage.setItem("plexochat_enter_to_send", String(partial.enterToSend));
+        }
+        if (partial.soundEnabled !== undefined) {
+          patchBody.sound_enabled = partial.soundEnabled;
+          localStorage.setItem("plexochat_sound_enabled", String(partial.soundEnabled));
+        }
 
         if (Object.keys(patchBody).length > 0) {
           const res = await fetch(`${getBackendUrl()}/api/v1/users/me`, {

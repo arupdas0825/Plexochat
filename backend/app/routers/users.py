@@ -253,6 +253,16 @@ async def update_own_profile(
         update_fields["learning_languages"] = payload.learning_languages
     if payload.interests is not None:
         update_fields["interests"] = payload.interests
+    if payload.app_language is not None:
+        update_fields["app_language"] = payload.app_language
+    if payload.auto_translate_enabled is not None:
+        update_fields["auto_translate_enabled"] = payload.auto_translate_enabled
+    if payload.read_receipts_enabled is not None:
+        update_fields["read_receipts_enabled"] = payload.read_receipts_enabled
+    if payload.enter_to_send is not None:
+        update_fields["enter_to_send"] = payload.enter_to_send
+    if payload.sound_enabled is not None:
+        update_fields["sound_enabled"] = payload.sound_enabled
 
     if len(update_fields) == 1:  # only updated_at — nothing to do
         return {"status": "ok", "message": "No changes provided."}
@@ -277,5 +287,10 @@ async def update_own_profile(
         "spoken_languages": update_fields.get("spoken_languages", current_user.spoken_languages),
         "learning_languages": update_fields.get("learning_languages", current_user.learning_languages),
         "interests": update_fields.get("interests", current_user.interests),
+        "app_language": update_fields.get("app_language", getattr(current_user, "app_language", "en")),
+        "auto_translate_enabled": update_fields.get("auto_translate_enabled", getattr(current_user, "auto_translate_enabled", True)),
+        "read_receipts_enabled": update_fields.get("read_receipts_enabled", getattr(current_user, "read_receipts_enabled", True)),
+        "enter_to_send": update_fields.get("enter_to_send", getattr(current_user, "enter_to_send", True)),
+        "sound_enabled": update_fields.get("sound_enabled", getattr(current_user, "sound_enabled", True)),
         "updated_fields": [k for k in update_fields if k != "updated_at"],
     }

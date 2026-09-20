@@ -127,6 +127,25 @@ function setToCache(text: string, targetLang: string, sourceLang: string, result
 }
 
 /**
+ * Clears the in-memory translation LRU cache.
+ */
+export function clearTranslationMemoryCache(): { clearedCount: number } {
+  const count = translationMemoryCache.size;
+  translationMemoryCache.clear();
+  return { clearedCount: count };
+}
+
+/**
+ * Returns current translation cache statistics.
+ */
+export function getTranslationCacheStats(): { size: number; capacity: number } {
+  return {
+    size: translationMemoryCache.size,
+    capacity: CACHE_MAX_ENTRIES,
+  };
+}
+
+/**
  * Primary Provider: Google Translate client endpoint
  */
 class GoogleTranslateProvider implements ITranslationProvider {

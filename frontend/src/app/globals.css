@@ -11,30 +11,30 @@
   --popover: #ffffff;
   --popover-foreground: #090a0f;
 
-  /* Primary Brand Violet / Indigo */
-  --primary: #4f46e5;
+  /* Primary Brand Teal / Mint-Green (Mockup Match) */
+  --primary: #0d9488;
   --primary-foreground: #ffffff;
-  --primary-hover: #4338ca;
+  --primary-hover: #0f766e;
 
   /* Secondary, Muted & Accent Surfaces */
-  --secondary: #f3f4f8;
-  --secondary-foreground: #1e2029;
-  --muted: #f1f2f6;
-  --muted-foreground: #666978;
-  --accent: #eef2ff;
-  --accent-foreground: #3730a3;
+  --secondary: #f0fdfa;
+  --secondary-foreground: #134e4a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #ccfbf1;
+  --accent-foreground: #115e59;
 
   /* Status Colors */
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
   --online: #10b981;
   --offline: #94a3b8;
-  --read-tick: #38bdf8;
+  --read-tick: #2fbf95;
 
   /* Borders & Focus */
-  --border: #e2e4ea;
-  --input: #e2e4ea;
-  --ring: #6366f1;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #14b8a6;
 
   /* Design Tokens: Border Radius */
   --radius-xs: 0.25rem;
@@ -63,42 +63,42 @@
   --shadow-subtle: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.07), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
   --shadow-popover: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.03);
-  --shadow-glow: 0 0 20px -3px rgba(99, 102, 241, 0.3);
+  --shadow-glow: 0 0 20px -3px rgba(47, 191, 149, 0.25);
 }
 
 .dark {
-  /* Surface & Base Colors (OLED Dark Mode) */
-  --background: #090a0f;
+  /* Surface & Base Colors (Mockup Deep Near-Black #0b0f14) */
+  --background: #0b0f14;
   --foreground: #f3f4f8;
-  --card: #12131a;
+  --card: #131922;
   --card-foreground: #f3f4f8;
-  --popover: #12131a;
+  --popover: #131922;
   --popover-foreground: #f3f4f8;
 
-  /* Primary Brand Violet / Indigo */
-  --primary: #6366f1;
+  /* Primary Brand Teal / Mint-Green (Mockup Match #2fbf95) */
+  --primary: #2fbf95;
   --primary-foreground: #ffffff;
-  --primary-hover: #4f46e5;
+  --primary-hover: #26a580;
 
   /* Secondary, Muted & Accent Surfaces */
-  --secondary: #181924;
+  --secondary: #171f2c;
   --secondary-foreground: #e2e4ea;
-  --muted: #181924;
-  --muted-foreground: #8a8d9f;
-  --accent: #1e1f30;
-  --accent-foreground: #c7d2fe;
+  --muted: #171f2c;
+  --muted-foreground: #8a91a0;
+  --accent: #1a2933;
+  --accent-foreground: #a7f3d0;
 
   /* Status Colors */
   --destructive: #dc2626;
   --destructive-foreground: #ffffff;
   --online: #10b981;
   --offline: #64748b;
-  --read-tick: #38bdf8;
+  --read-tick: #2fbf95;
 
   /* Borders & Focus */
-  --border: #222433;
-  --input: #222433;
-  --ring: #6366f1;
+  --border: #1e2634;
+  --input: #1e2634;
+  --ring: #34d399;
 
   /* Design Tokens: Text Hierarchy (Dark) */
   --text-primary: #f3f4f8;
@@ -108,6 +108,7 @@
   /* Design Tokens: Shadows (Dark) */
   --shadow-subtle: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
   --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.4), 0 1px 2px -1px rgba(0, 0, 0, 0.3);
+  --shadow-glow: 0 0 20px -3px rgba(47, 191, 149, 0.35);
   --shadow-popover: 0 12px 30px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
   --shadow-glow: 0 0 25px -2px rgba(99, 102, 241, 0.4);
 }

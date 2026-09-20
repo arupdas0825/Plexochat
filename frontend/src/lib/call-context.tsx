@@ -33,6 +33,20 @@ export interface CallParticipant {
   avatarBg?: string;
 }
 
+export interface CallLogItem {
+  id: string;
+  peerId: string;
+  peerName: string;
+  peerUsername?: string;
+  peerAvatar?: string;
+  peerAvatarBg?: string;
+  callType: CallType;
+  direction: "incoming" | "outgoing";
+  status: "completed" | "missed" | "declined" | "failed";
+  timestamp: string;
+  durationSeconds: number;
+}
+
 interface CallContextType {
   callState: CallState;
   callType: CallType;
@@ -45,6 +59,8 @@ interface CallContextType {
   callDuration: number;
   formattedDuration: string;
   errorMessage: string | null;
+  callLogs: CallLogItem[];
+  clearCallLogs: () => void;
   startCall: (peer: CallParticipant, type: CallType) => Promise<void>;
   acceptCall: () => Promise<void>;
   declineCall: () => void;
@@ -232,6 +248,23 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
   const [callDuration, setCallDuration] = useState<number>(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [callLogs, setCallLogs] = useState<CallLogItem[]>(() => {
+    if (typeof window !== "undefined" && user?.id) {
+      try {
+        const stored = localStorage.getItem(`plexochat_call_logs_${user.id}`);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch {}
+    }
+    return [];
+  });
+
+  const callDirectionRef = useRef<"incoming" | "outgoing">("outgoing");
+  const activePeerRef = useRef<CallParticipant | null>(null);
+  const callTypeRef = useRef<CallType>("voice");
+  const callDurationRef = useRef<number>(0);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const currentCallIdRef = useRef<string | null>(null);
@@ -240,6 +273,57 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const ringTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const durationTimerRef = useRef<NodeJS.Timeout | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    activePeerRef.current = activePeer;
+  }, [activePeer]);
+
+  useEffect(() => {
+    callTypeRef.current = callType;
+  }, [callType]);
+
+  useEffect(() => {
+    callDurationRef.current = callDuration;
+  }, [callDuration]);
+
+  const recordCallLog = useCallback(
+    (status: "completed" | "missed" | "declined" | "failed", durationSecs = 0) => {
+      const peer = activePeerRef.current;
+      if (!peer) return;
+      const newLog: CallLogItem = {
+        id: `call_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        peerId: peer.id,
+        peerName: peer.displayName,
+        peerUsername: peer.username,
+        peerAvatar: peer.avatarUrl,
+        peerAvatarBg: peer.avatarBg,
+        callType: callTypeRef.current,
+        direction: callDirectionRef.current,
+        status,
+        timestamp: new Date().toISOString(),
+        durationSeconds: durationSecs,
+      };
+      setCallLogs((prev) => {
+        const updated = [newLog, ...prev.filter((l) => l.id !== newLog.id)].slice(0, 50);
+        if (typeof window !== "undefined" && user?.id) {
+          try {
+            localStorage.setItem(`plexochat_call_logs_${user.id}`, JSON.stringify(updated));
+          } catch {}
+        }
+        return updated;
+      });
+    },
+    [user?.id]
+  );
+
+  const clearCallLogs = useCallback(() => {
+    setCallLogs([]);
+    if (typeof window !== "undefined" && user?.id) {
+      try {
+        localStorage.removeItem(`plexochat_call_logs_${user.id}`);
+      } catch {}
+    }
+  }, [user?.id]);
 
   // Keep localStreamRef synchronized
   useEffect(() => {
@@ -430,11 +514,13 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       if (callState !== "IDLE" || !user?.id) return;
 
       const callId = `call_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      callDirectionRef.current = "outgoing";
       currentCallIdRef.current = callId;
       setActivePeer(peer);
       setCallType(type);
       setCallState("CALLING");
       setErrorMessage(null);
+      setCallDuration(0);
 
       try {
         const stream = await acquireMedia(type, "user");
@@ -472,6 +558,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
             to_user_id: peer.id,
             reason: "timeout",
           });
+          recordCallLog("missed", 0);
           cleanUpCallResources();
           setCallState("DECLINED");
           setErrorMessage("No answer");
@@ -544,11 +631,12 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         reason: "declined",
       });
     }
+    recordCallLog("declined", 0);
     tonePlayer.playEndTone();
     cleanUpCallResources();
     setCallState("DECLINED");
     setTimeout(() => setCallState("IDLE"), 1500);
-  }, [activePeer, sendWsFrame, cleanUpCallResources]);
+  }, [activePeer, sendWsFrame, cleanUpCallResources, recordCallLog]);
 
   // 4. Hang up / End active call
   const endCall = useCallback(() => {
@@ -561,11 +649,12 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         reason: "hung_up",
       });
     }
+    recordCallLog(callDurationRef.current > 0 ? "completed" : "missed", callDurationRef.current);
     tonePlayer.playEndTone();
     cleanUpCallResources();
     setCallState("ENDED");
     setTimeout(() => setCallState("IDLE"), 1500);
-  }, [activePeer, sendWsFrame, cleanUpCallResources]);
+  }, [activePeer, sendWsFrame, cleanUpCallResources, recordCallLog]);
 
   // 5. Mute/Unmute microphone
   const toggleMute = useCallback(() => {
@@ -646,6 +735,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
           }
 
           currentCallIdRef.current = call_id;
+          callDirectionRef.current = "incoming";
           const peer: CallParticipant = {
             id: from_user_id,
             displayName: caller_name || "User",
@@ -669,6 +759,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
           // 45s Ringing timeout
           ringTimeoutRef.current = setTimeout(() => {
             tonePlayer.stop();
+            recordCallLog("missed", 0);
             cleanUpCallResources();
             setCallState("DECLINED");
             setTimeout(() => setCallState("IDLE"), 2000);
@@ -716,6 +807,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
         case "decline": {
           if (call_id !== currentCallIdRef.current) return;
+          recordCallLog("declined", 0);
           tonePlayer.playEndTone();
           cleanUpCallResources();
           setCallState("DECLINED");
@@ -726,6 +818,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
         case "busy": {
           if (call_id !== currentCallIdRef.current) return;
+          recordCallLog("failed", 0);
           tonePlayer.playEndTone();
           cleanUpCallResources();
           setCallState("BUSY");
@@ -736,6 +829,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
         case "unavailable": {
           if (call_id !== currentCallIdRef.current) return;
+          recordCallLog("failed", 0);
           tonePlayer.playEndTone();
           cleanUpCallResources();
           setCallState("FAILED");
@@ -746,6 +840,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
         case "end": {
           if (call_id !== currentCallIdRef.current) return;
+          recordCallLog(callDurationRef.current > 0 ? "completed" : "missed", callDurationRef.current);
           tonePlayer.playEndTone();
           cleanUpCallResources();
           setCallState("ENDED");
@@ -759,7 +854,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => unregister();
-  }, [registerCallSignalHandler, callState, sendWsFrame, cleanUpCallResources]);
+  }, [registerCallSignalHandler, callState, sendWsFrame, cleanUpCallResources, recordCallLog]);
 
   return (
     <CallContext.Provider
@@ -775,6 +870,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         callDuration,
         formattedDuration: formatDuration(callDuration),
         errorMessage,
+        callLogs,
+        clearCallLogs,
         startCall,
         acceptCall,
         declineCall,
