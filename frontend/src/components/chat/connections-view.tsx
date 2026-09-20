@@ -33,7 +33,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useConnections } from "@/lib/connections-context";
 import { useChat } from "@/lib/chat-context";
-import { ConnectionRequest, ChatThread, ChatUser } from "@/lib/mock-chat-data";
+import { ConnectionRequest, ChatThread, ChatUser } from "@/lib/chat-types";
 
 interface ConnectionsViewProps {
   requests?: ConnectionRequest[];

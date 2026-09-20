@@ -30,7 +30,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { DropdownMenu, DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import { ChatThread, ChatMessage } from "@/lib/mock-chat-data";
+import { ChatThread, ChatMessage } from "@/lib/chat-types";
 import { useVisualViewport } from "@/lib/use-visual-viewport";
 import { useCall } from "@/lib/call-context";
 import { useChat } from "@/lib/chat-context";

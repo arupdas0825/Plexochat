@@ -1,0 +1,54 @@
+/**
+ * Chat System Domain Types
+ * Canonical production data structures for 1-to-1 encrypted multilingual conversations.
+ */
+
+export interface ChatUser {
+  id: string;
+  username: string;
+  displayName: string;
+  plexoChatId: string;
+  avatarBg: string;
+  preferredLanguage: string;
+  languageCode?: string;
+  online: boolean;
+  bio?: string;
+  spokenLanguages?: string[];
+  learningLanguages?: string[];
+  interests?: string[];
+  photoUrl?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  senderId: string; // 'me' or user id
+  senderName: string;
+  originalText: string;
+  translatedText: string;
+  originalLang: string;
+  targetLangCode: string;
+  timestamp: string;
+  status: "sending" | "sent" | "delivered" | "read" | "failed";
+  isPhoto?: boolean;
+  photoUrl?: string;
+  translationUnavailable?: boolean;
+}
+
+export interface ChatThread {
+  id: string;
+  participant: ChatUser;
+  lastMessage: ChatMessage;
+  unreadCount: number;
+  messages: ChatMessage[];
+  muted?: boolean;
+  favorite?: boolean;
+  disappearingTtl?: number | null;
+  perChatLanguageOverride?: string | null;
+}
+
+export interface ConnectionRequest {
+  id: string;
+  sender: ChatUser;
+  timestamp: string;
+  status: "PENDING" | "ACCEPTED" | "DECLINED" | "BLOCKED";
+}

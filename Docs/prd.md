@@ -38,7 +38,7 @@ These decisions are locked unless intentionally revisited:
 1. Product name: **PlexoChat**.
 2. Fully web-based application (desktop + mobile web, responsive).
 3. 1-to-1 private messaging only — no groups in MVP.
-4. Text + photo communication only.
+4. Text-based communication is the core mode. Photo/file sharing is explicitly OUT OF SCOPE (descoped — see §6) to keep focus on the product's real purpose: multilingual chat and incidental language learning.
 5. Automatic translation of every message — no manual "translate" action required.
 6. Translation target is always the **receiver's** preferred language, not the sender's.
 7. The **sender also sees the translated version by default**, not their own original text.
@@ -47,7 +47,7 @@ These decisions are locked unless intentionally revisited:
 10. An accessible, non-gesture alternative ("View original") must also exist.
 11. Natural mixed-language input (romanized script, code-switching, slang, emojis) must be supported without forcing users to pick a "writing language."
 12. Connections require an explicit request + acceptance — no unsolicited messaging.
-13. End-to-end encryption (E2EE) applies to both text and photos.
+13. End-to-end encryption (E2EE) applies to all message content (text). Photo sharing is out of scope — see §6.
 14. Client-side/local translation is preferred to preserve strict E2EE privacy guarantees.
 15. The server acts primarily as an **encrypted relay** plus coordination service (auth, discovery, connection state, delivery state).
 16. No voice, video, group chat, or public social features in the MVP.
@@ -100,11 +100,9 @@ NONE → REQUEST_SENT → PENDING → ACCEPTED → E2EE_SESSION_ESTABLISHED → 
 
 The receiving user can **Accept**, **Decline**, or **Block**. Messaging is only possible after acceptance — this is the core anti-spam / anti-abuse mechanism for the MVP.
 
-### 5.5 Photo sharing
+### 5.5 Photo sharing — DESCOPED
 
-- Sender selects a photo → it is encrypted locally → encrypted blob sent over WSS → server stores/relays ciphertext only → receiver downloads ciphertext → receiver decrypts locally → photo is displayed.
-- The server should never need access to plaintext photo content.
-- No general-purpose file sharing (documents, videos, arbitrary file types) is in scope for MVP — photos only.
+Photo sharing was originally planned (client-side encrypt → R2 relay → client-side decrypt) but has been **explicitly removed from scope**. PlexoChat's core purpose is multilingual chat and the incidental language-learning benefit that comes from real conversation — photo/file sharing does not serve that purpose and adds unnecessary attack surface (upload validation, storage infrastructure, retention policy) for a product this focused. No Cloudflare R2 integration, attachment model, or photo-message UI should be built. If this decision is ever revisited, it should be a deliberate future product call, not incidental scope creep.
 
 ---
 
@@ -117,6 +115,7 @@ The receiving user can **Accept**, **Decline**, or **Block**. Messaging is only 
 - Public feed or discovery feed
 - Payments
 - Stickers as a core feature
+- **Photo / file sharing (descoped — see §5.5)**
 - General-purpose file sharing
 - Public social networking features (followers, public profiles, etc.)
 - Language-partner discovery ("I speak X / want to learn Y" matching)
@@ -140,8 +139,8 @@ These may be considered post-MVP (see Section 8).
 | F6 | Automatic language detection + translation of every sent message | Must |
 | F7 | Receiver-language-targeted translation, symmetric for both participants | Must |
 | F8 | Original-message preservation and reveal (gesture + accessible alternative) | Must |
-| F9 | Encrypted 1-to-1 photo sharing | Must |
-| F10 | End-to-end encryption for text and photos | Must |
+| F9 | ~~Encrypted 1-to-1 photo sharing~~ | **Descoped — see §5.5** |
+| F10 | End-to-end encryption for text | Must |
 | F11 | Message delivery status (sent/delivered/read where feasible) | Should |
 | F12 | Chat history persistence (ciphertext at rest server-side) | Must |
 | F13 | Reconnection handling for dropped WebSocket connections | Should |
@@ -167,7 +166,7 @@ These must not distract from MVP delivery and should be tracked separately from 
 
 ## 9. Non-Functional Requirements
 
-- **Privacy:** server should operate on the minimum data necessary (auth, discovery, connection state, encrypted relay, delivery state). It should not require plaintext messages, plaintext photos, or private keys.
+- **Privacy:** server should operate on the minimum data necessary (auth, discovery, connection state, encrypted relay, delivery state). It should not require plaintext messages or private keys. (Photo sharing is out of scope — see §5.5.)
 - **Security:** see `security.md` for the full requirement set (rate limiting, input validation, secrets handling, dependency hygiene, error handling, file upload safety) plus the cryptographic requirements in `architecture.md`.
 - **Availability/Reliability:** graceful reconnection and delivery-state recovery after network interruption.
 - **Performance:** translation and message round-trip should feel near-instant in normal conditions; no artificial multi-second delays in the core chat loop.
@@ -180,6 +179,6 @@ These must not distract from MVP delivery and should be tracked separately from 
 
 - Two users with different preferred languages can create a connection and exchange messages, each seeing the conversation in their own preferred language by default.
 - Either user can reliably view the original message via gesture or accessible control.
-- Messages and photos are encrypted client-side before transmission; the server never sees plaintext content.
+- Messages are encrypted client-side before transmission; the server never sees plaintext content. (Photo sharing is out of scope.)
 - Unsolicited messaging is impossible — connection acceptance is enforced server-side.
 - The application is fully usable on both desktop and mobile web.

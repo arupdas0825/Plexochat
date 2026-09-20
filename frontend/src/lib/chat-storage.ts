@@ -7,7 +7,7 @@
  * - Private keys and ratchet states never leave the local browser sandbox.
  */
 
-import { ChatMessage, ChatThread } from "./mock-chat-data";
+import { ChatMessage, ChatThread } from "./chat-types";
 
 const DB_NAME = "plexochat_db";
 const DB_VERSION = 1;

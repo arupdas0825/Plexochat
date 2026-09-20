@@ -99,26 +99,9 @@ Implement:
 
 ---
 
-## Phase 6 — Encrypted Photos
+## Phase 6 — ~~Encrypted Photos~~ DESCOPED
 
-**Goal:** Extend the E2EE model to photo sharing.
-
-Implement:
-- Local photo encryption before upload (Web Crypto)
-- FastAPI-issued presigned upload URLs for **Cloudflare R2** (private bucket, no public access)
-- Direct browser-to-R2 encrypted upload; `encrypted_photos` metadata + R2 object key recorded in MongoDB Atlas
-- FastAPI-issued presigned download URLs, re-checked against `connections` ACCEPTED state before issuance
-- Local decryption on receipt
-- Secure image display
-
-**Security work introduced here (see `security.md`):**
-- File type/content validation (not extension-based), performed client-side before encryption
-- File size limits, enforced both client-side and via presigned URL constraints
-- R2 bucket kept private; all access via short-lived, scoped presigned URLs
-- Randomized/non-predictable R2 object keys
-- Guarantees that uploaded content can never be executed as code
-
-**Exit criteria:** Photos are shared with MongoDB only ever storing R2 object references/metadata and R2 only ever holding ciphertext blobs; upload validation rejects disguised/malicious file content; presigned URLs are correctly scoped and short-lived.
+**This phase is cancelled, not deferred.** Photo/file sharing was reconsidered and removed from PlexoChat's scope — the product's actual purpose is multilingual chat and the language-learning benefit that comes from real conversation, and photo sharing doesn't serve that goal while adding real attack surface (upload validation, R2 storage, retention policy) for a focused product. No Cloudflare R2 integration, attachment model, or photo UI should be built. See `memory.md` item 13c and `prd.md` §5.5 for the locked decision. If this is ever revisited, it needs a deliberate product decision recorded in those docs first.
 
 ---
 
@@ -137,7 +120,7 @@ Test:
 - Malformed message/schema-violation handling
 - Storage security (encrypted-at-rest expectations, secrets scanning, access controls)
 - Dependency vulnerability audit (frontend + backend)
-- File upload safety (see Phase 6)
+- File upload safety — N/A, photo sharing descoped (see Phase 6)
 - Error handling / information leakage review
 
 **Exit criteria:** All items in `security.md` verified with documented results; any findings are remediated or explicitly risk-accepted with rationale.

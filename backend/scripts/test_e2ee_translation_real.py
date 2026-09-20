@@ -122,6 +122,7 @@ async def test_translation_service(text: str, target_lang: str) -> dict:
     # 1. Try Google Translate client API (try dict-chrome-ex client first to avoid 429, then gtx)
     for client_param in ["dict-chrome-ex", "gtx"]:
         try:
+            # pyrefly: ignore [missing-attribute]
             url = f"https://translate.googleapis.com/translate_a/single?client={client_param}&sl=auto&tl={target_lang}&dt=t&q={requests.utils.quote(text)}"
             resp = requests.get(url, headers=headers, timeout=10)
             if resp.status_code == 200:
@@ -141,6 +142,7 @@ async def test_translation_service(text: str, target_lang: str) -> dict:
             return {"text": text, "detected_lang": src, "provider": "identical_lang"}
 
         pair = f"{src}|{target_lang}"
+        # pyrefly: ignore [missing-attribute]
         url2 = f"https://api.mymemory.translated.net/get?q={requests.utils.quote(text)}&langpair={pair}"
         resp2 = requests.get(url2, headers=headers, timeout=10)
         if resp2.status_code == 200:
@@ -285,6 +287,7 @@ async def main():
 
         # Verify claimed OTK was consumed atomically in MongoDB
         doc_b = await device_keys_col.find_one({"user_id": id_b})
+        # pyrefly: ignore [unsupported-operation]
         assert claimed_key_id not in doc_b["one_time_keys"], "OTK was not consumed from MongoDB!"
         print("  [OK] Verified: Claimed OTK was atomically removed from MongoDB device_keys.")
 

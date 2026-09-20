@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { DropdownMenu, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/ui/empty-state";
-import { ChatThread } from "@/lib/mock-chat-data";
+import { ChatThread } from "@/lib/chat-types";
 import { useConnections } from "@/lib/connections-context";
 import { formatMessageTime } from "@/lib/utils";
 import { useChat } from "@/lib/chat-context";

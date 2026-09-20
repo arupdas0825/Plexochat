@@ -44,6 +44,7 @@ async def get_conversation_preferences(
             muted=False,
             favorite=False,
             disappearing_ttl=None,
+            per_chat_language_override=None,
             updated_at=datetime.now(timezone.utc),
         )
 
@@ -53,6 +54,7 @@ async def get_conversation_preferences(
         muted=doc.get("muted", False),
         favorite=doc.get("favorite", False),
         disappearing_ttl=doc.get("disappearing_ttl"),
+        per_chat_language_override=doc.get("per_chat_language_override"),
         updated_at=doc.get("updated_at", datetime.now(timezone.utc)),
     )
 
@@ -61,7 +63,7 @@ async def get_conversation_preferences(
     "/{peer_id}/preferences",
     response_model=ConversationPreferences,
     summary="Update conversation preferences with peer",
-    description="Updates user-specific preferences (muted, favorite, disappearing_ttl) for this conversation.",
+    description="Updates user-specific preferences (muted, favorite, disappearing_ttl, per_chat_language_override) for this conversation.",
 )
 async def update_conversation_preferences(
     peer_id: str,
@@ -79,6 +81,8 @@ async def update_conversation_preferences(
     if payload.disappearing_ttl is not None or "disappearing_ttl" in payload.model_fields_set:
         # Allow setting null/None to disable TTL
         update_set["disappearing_ttl"] = payload.disappearing_ttl
+    if payload.per_chat_language_override is not None or "per_chat_language_override" in payload.model_fields_set:
+        update_set["per_chat_language_override"] = payload.per_chat_language_override
 
     col = get_conversation_preferences_collection()
     doc = await col.find_one_and_update(
@@ -96,7 +100,8 @@ async def update_conversation_preferences(
 
     logger.info(
         f"Conversation preferences updated: user={current_user.id} peer={peer_id} "
-        f"muted={doc.get('muted')} favorite={doc.get('favorite')} ttl={doc.get('disappearing_ttl')}"
+        f"muted={doc.get('muted')} favorite={doc.get('favorite')} ttl={doc.get('disappearing_ttl')} "
+        f"lang_override={doc.get('per_chat_language_override')}"
     )
 
     return ConversationPreferences(
@@ -105,5 +110,6 @@ async def update_conversation_preferences(
         muted=doc.get("muted", False),
         favorite=doc.get("favorite", False),
         disappearing_ttl=doc.get("disappearing_ttl"),
+        per_chat_language_override=doc.get("per_chat_language_override"),
         updated_at=doc.get("updated_at", now),
     )

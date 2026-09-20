@@ -16,7 +16,7 @@ Purpose of this document: a compact, durable reference of decisions, constraints
 
 1. Fully web-based (desktop + mobile browsers); no native app in MVP.
 2. 1-to-1 private messaging only.
-3. Text + photo only — no other file types.
+3. Text-only messaging. Photo/file sharing was considered, then **explicitly descoped** — see item 3a below.
 4. Translation is automatic and always on — never an opt-in manual action.
 5. Translation target = **receiver's** preferred language, not the sender's.
 6. **Sender also sees the translated version by default** — this is counterintuitive and easy to get wrong; do not default to showing the sender their own raw input.
@@ -24,10 +24,11 @@ Purpose of this document: a compact, durable reference of decisions, constraints
 8. Reveal interaction: double-click (desktop) / double-tap (mobile), **plus** a mandatory accessible non-gesture alternative ("View original").
 9. Mixed-language/romanized/code-switched input (e.g., Banglish) must work without the user picking a "language" per message.
 10. Messaging requires an explicit connection request **and** acceptance — no unsolicited messaging, ever.
-11. E2EE applies to both text and photos.
+11. E2EE applies to all message text.
 12. Client-side/local translation is the preferred architecture specifically because it preserves the E2EE privacy claim — if this is ever revisited in favor of a cloud translation API, the E2EE/privacy claims must be re-qualified everywhere (marketing, `architecture.md`, `security.md`, UI copy).
-13. The server is designed as a **temporary** encrypted relay + coordination layer — it should never need plaintext messages, plaintext photos, or private keys.
-13a. **Store-and-forward messaging (WhatsApp/Signal-style) — locked.** The backend is NOT a permanent chat-history database. Messages/photos are queued as ciphertext only until delivered-and-acknowledged or until a configurable retention TTL expires, then deleted server-side. Real conversation history lives in **encrypted local device storage** (IndexedDB), not in MongoDB. If a future request proposes "just store messages in Mongo for simplicity," that contradicts this locked decision — flag it explicitly rather than silently implementing it.
+13. The server is designed as a **temporary** encrypted relay + coordination layer — it should never need plaintext messages or private keys.
+13c. **Photo/file sharing is DESCOPED — locked decision.** PlexoChat's core purpose is multilingual chat and incidental language learning; photo sharing does not serve that and was removed from scope to keep the product focused and reduce unnecessary attack surface (upload validation, object storage, retention policy). Do NOT build Cloudflare R2 integration, an attachment model, or any photo-message UI. If revisited, this must be a deliberate future product decision, recorded here — not incidental scope creep from a stray prompt.
+13a. **Store-and-forward messaging (WhatsApp/Signal-style) — locked.** The backend is NOT a permanent chat-history database. Messages are queued as ciphertext only until delivered-and-acknowledged or until a configurable retention TTL expires, then deleted server-side. Real conversation history lives in **encrypted local device storage** (IndexedDB), not in MongoDB. If a future request proposes "just store messages in Mongo for simplicity," that contradicts this locked decision — flag it explicitly rather than silently implementing it.
 14. No custom cryptography, under any circumstances — established libraries/protocols only.
 15. Never make absolute security claims ("100% secure," "unbreakable," "impossible to hack") in any user-facing or marketing surface.
 
@@ -76,19 +77,19 @@ Backend                FastAPI + Python
 Authentication         Firebase Authentication
 Database               MongoDB Atlas
 Real-time / Presence   WebSocket + Redis
-Photo Storage          Cloudflare R2
-End-to-End Encryption  @matrix-org/olm (Signal Double-Ratchet protocol by Matrix.org)
-Translation Provider   Client-side Google Translate (Option B) before encryption, with MyMemory fallback
+Photo Storage          ~~Cloudflare R2~~ (DESCOPED — see item 13c; not part of the build)
+End-to-End Encryption  Browser-side Web Crypto + established protocol/library
 ```
 
 Key implications of this specific stack (record these so they aren't re-derived/re-argued later):
 - **Firebase Authentication owns passwords/credentials.** FastAPI never stores or hashes passwords itself — it only verifies Firebase-issued ID tokens via the Admin SDK. PlexoChat's own backend still owns username, PlexoChat ID, display name, preferred receiving language, connections, and device keys.
 - **MongoDB Atlas replaces PostgreSQL** as the durable store. Data model is document-based (see `architecture.md` §4), keyed off `firebase_uid` for user identity linkage.
 - **Redis** is unchanged in role: real-time presence + rate-limit counters + in-flight delivery/session state.
-- **Cloudflare R2 replaces the earlier generic "isolated object storage"** placeholder for encrypted photo blobs. Access pattern is FastAPI-issued short-lived presigned URLs, browser-to-R2 direct upload/download — R2 bucket stays private.
+- **Cloudflare R2 / photo storage: DESCOPED.** Originally planned, R2 access pattern was documented (presigned URLs, private bucket) but photo sharing itself was later removed from product scope (see item 13c) — do not implement this.
 - **Firebase client config vs. Admin SDK key:** the Firebase client-side config (API key, project ID) is expected to be public by Firebase's own design — don't mistake this for a leak. The Admin SDK **service account key** is the actual secret and must never reach the frontend or repo.
-- **E2EE Library Selection (LOCKED):** `@matrix-org/olm` (v3.2.15). Signal Double-Ratchet implementation with Curve25519 identity keys, Ed25519 signing keys, and ephemeral one-time prekeys. Private keys remain exclusively in client IndexedDB. Device public keys are published via `POST /api/v1/devices/keys`.
-- **Translation Architecture Decision (LOCKED - Option B):** Client-side translation runs directly in the browser *before* Olm encryption. Plaintext is never seen by PlexoChat's servers. Third-party translation disclosure is explicitly declared in Settings UI: *"Messages are translated using a third-party translation service before encryption. Google Translate may process message text for translation purposes. PlexoChat's own servers never see message content."*
+- Client crypto/storage: Web Crypto API, IndexedDB, an established E2EE library/protocol (specific choice still to be finalized — **not yet locked**, see below).
+
+**Open item (unchanged):** the exact E2EE protocol/library has intentionally not been locked yet. When it is chosen during Phase 5 implementation, record the choice and rationale here.
 
 ---
 
@@ -135,11 +136,21 @@ Key implications of this specific stack (record these so they aren't re-derived/
 
 ---
 
+## 7a. Language Registry Addition — Banglish (bn-Latn)
+
+Added as the **26th registry entry**, decided after the initial 25-language launch set:
+
+- **Code:** `bn-Latn` (BCP-47 style: base language `bn` + ISO 15924 script subtag `Latn`), NOT a fake standalone ISO 639 code — "Banglish" is a script/style variant of Bengali (romanized, code-mixed, informal), not a separate language.
+- **Reusable pattern:** this `<lang>-Latn` convention should be the template for any future romanized/informal-script language variant (Hinglish = `hi-Latn`, Arabizi = `ar-Latn`, etc.) — keeps the registry's "config only, no rewrite" scalability promise intact.
+- **Technical implication (important, don't lose this):** translating **to** `bn-Latn` is NOT a plain "set target=bn-Latn" call to a standard MT provider — most translation APIs can translate to Bengali script but not reliably to a casual romanized style on their own. This needs either (a) a transliteration step layered after standard Bengali translation, or (b) an LLM-based translation provider directly prompted to output "Bengali in casual romanized Latin script (Banglish), informal tone" — option (b) is the practical fit for PlexoChat since natural/casual translation quality is already the product's core differentiator (see `prd.md`), and PlexoChat likely already needs an LLM-capable provider route for that reason.
+- **Status:** marked `experimental` in the registry until tested with real users; promote to `supported` after validation.
+- **Rationale for adding:** requested directly by the product owner, who communicates with tools/collaborators in Banglish themselves — a natural, well-motivated case for PlexoChat's own target audience.
+
 ## 8. Open Questions / Not Yet Decided
 
-- [Resolved 2026-09] Exact E2EE protocol/library selection: `@matrix-org/olm` (Double-Ratchet).
+- Exact E2EE protocol/library selection (Phase 5).
 - Whether/when passwordless auth (e.g., passkeys) is considered vs. traditional password + hashing.
-- Object storage provider/approach for encrypted photo blobs.
+- ~~Object storage provider/approach for encrypted photo blobs.~~ Resolved: N/A, photo sharing descoped.
 - Specific rate-limit thresholds (deliberately left configurable, not hardcoded — see `security.md`).
 - Long-term data retention policy for ciphertext and metadata.
 

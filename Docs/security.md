@@ -83,7 +83,13 @@ Requirements:
 
 ---
 
-## 6. File Upload Safety (Photos)
+## 6. File Upload Safety (Photos) — ⚠️ DESCOPED, NOT PART OF THE BUILD
+
+> **Photo sharing has been removed from PlexoChat's scope** (see `memory.md` item 13c, `prd.md` §5.5). PlexoChat's focus is text-based multilingual chat and language learning — no photo/file upload functionality should be built, so none of the controls below apply. Kept for historical reference only in case this decision is revisited.
+
+<details>
+<summary>Original requirements (not implemented — reference only)</summary>
+
 
 Since PlexoChat MVP scope is photo sharing only (not general file upload — see `prd.md`), apply the following to the photo upload path:
 
@@ -96,6 +102,8 @@ Since PlexoChat MVP scope is photo sharing only (not general file upload — see
 - Apply consistent naming/randomized R2 object keys for uploaded blobs to avoid path traversal or predictable-key enumeration; do not derive object keys from predictable user-visible identifiers alone.
 
 **Verification (Phase 7, aligned with Phase 6 exit criteria in `phases.md`):** attempt to upload disguised/malicious file content, oversized files, and path-traversal-style filenames; confirm rejection, isolated storage, and no execution vector.
+
+</details>
 
 ---
 

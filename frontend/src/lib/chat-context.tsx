@@ -8,13 +8,14 @@ import React, {
   useRef,
   useCallback,
 } from "react";
-import { ChatThread, ChatMessage, ChatUser } from "./mock-chat-data";
+import { ChatThread, ChatMessage, ChatUser } from "./chat-types";
 import { useAuth, getWebSocketUrl, getBackendUrl } from "./auth-context";
 import { useConnections } from "./connections-context";
 import {
   translateText,
   getLanguageLabel,
   getLanguageCode,
+  resolveTargetLanguage,
 } from "./translation-service";
 import {
   initOlm,
@@ -57,7 +58,12 @@ interface ChatContextType {
   deleteChat: (threadId: string) => Promise<void>;
   updateThreadPreferences: (
     threadId: string,
-    prefs: { muted?: boolean; favorite?: boolean; disappearing_ttl?: number | null }
+    prefs: {
+      muted?: boolean;
+      favorite?: boolean;
+      disappearing_ttl?: number | null;
+      per_chat_language_override?: string | null;
+    }
   ) => Promise<void>;
   refreshPeerProfile: (userId: string) => Promise<ChatUser | null>;
   sendWsFrame: (frame: Record<string, unknown>) => boolean;
@@ -730,6 +736,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                   muted: data.muted ?? false,
                   favorite: data.favorite ?? false,
                   disappearingTtl: data.disappearing_ttl ?? null,
+                  perChatLanguageOverride: data.per_chat_language_override ?? null,
                 };
               }
               return t;
@@ -783,11 +790,17 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       "msg-" + Date.now() + "-" + Math.random().toString(36).substring(2, 7);
     const nowIso = new Date().toISOString();
 
-    const senderLang = user.preferredReceivingLanguage || "en";
-    const recipientLang =
-      thread.participant.languageCode ||
-      thread.participant.preferredLanguage ||
-      "en";
+    const senderLang = resolveTargetLanguage({
+      perChatOverride: thread.perChatLanguageOverride,
+      userPreferred: user.preferredReceivingLanguage,
+      defaultLang: "en",
+    });
+    const recipientLang = resolveTargetLanguage({
+      userPreferred:
+        thread.participant.languageCode ||
+        thread.participant.preferredLanguage,
+      defaultLang: "en",
+    });
 
     // 1. OPTIMISTIC LOCAL INSERTION — Show immediately in sender's UI
     const optimisticMsg: ChatMessage = {
@@ -1051,7 +1064,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const updateThreadPreferences = useCallback(
     async (
       threadId: string,
-      prefs: { muted?: boolean; favorite?: boolean; disappearing_ttl?: number | null }
+      prefs: {
+        muted?: boolean;
+        favorite?: boolean;
+        disappearing_ttl?: number | null;
+        per_chat_language_override?: string | null;
+      }
     ) => {
       const target = threads.find((t) => t.id === threadId);
       if (!target) return;
@@ -1067,6 +1085,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               favorite: prefs.favorite !== undefined ? prefs.favorite : t.favorite,
               disappearingTtl:
                 prefs.disappearing_ttl !== undefined ? prefs.disappearing_ttl : t.disappearingTtl,
+              perChatLanguageOverride:
+                prefs.per_chat_language_override !== undefined
+                  ? prefs.per_chat_language_override
+                  : t.perChatLanguageOverride,
             };
           }
           return t;

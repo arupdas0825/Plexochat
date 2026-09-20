@@ -1,6 +1,6 @@
 # PlexoChat Trademark Policy
 
-"PlexoChat"™, the PlexoChat name, and the PlexoChat logo (collectively, the "Marks") are trademarks of [Your Name / Company Name] ("the Trademark Owner"). The Marks are not covered by the project's software license (see `LICENSE.md`) and are governed separately by this policy.
+"PlexoChat"™, the PlexoChat name, and the PlexoChat logo (collectively, the "Marks") are trademarks of Arup Das ("the Trademark Owner"). The Marks are not covered by the project's software license (see `LICENSE.md`) and are governed separately by this policy.
 
 ## What This Means
 

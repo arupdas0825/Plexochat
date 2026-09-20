@@ -198,15 +198,10 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const SUPPORTED_LANGUAGES = [
-  { code: "en", name: "English", flag: "🇬🇧" },
-  { code: "bn", name: "Bengali (বাংলা)", flag: "🇧🇩" },
-  { code: "de", name: "German (Deutsch)", flag: "🇩🇪" },
-  { code: "es", name: "Spanish (Español)", flag: "🇪🇸" },
-  { code: "fr", name: "French (Français)", flag: "🇫🇷" },
-  { code: "ja", name: "Japanese (日本語)", flag: "🇯🇵" },
-  { code: "ar", name: "Arabic (العربية)", flag: "🇸🇦" },
-];
+import { LANGUAGE_REGISTRY, SUPPORTED_LANGUAGES_COMPAT } from "./languages/registry";
+
+export { LANGUAGE_REGISTRY } from "./languages/registry";
+export const SUPPORTED_LANGUAGES = SUPPORTED_LANGUAGES_COMPAT;
 
 /**
  * Format Firebase Auth error codes into helpful user-facing error messages

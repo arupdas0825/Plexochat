@@ -2,7 +2,7 @@
  * Global Discoverable People, Map Clusters, Connections & Calendar Data Store
  * Clean production domain types and dynamic generators from real user sessions.
  */
-import { ChatThread } from "./mock-chat-data";
+import { ChatThread } from "./chat-types";
 
 export interface DiscoverableUser {
   id: string;

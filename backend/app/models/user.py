@@ -4,22 +4,9 @@ from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-# Validated language codes — must match frontend SUPPORTED_LANGUAGES list.
-# Any value outside this set is rejected by the API.
-SUPPORTED_LANGUAGE_CODES = {"en", "bn", "de", "es", "fr", "ja", "ar"}
+from app.core.languages import SUPPORTED_LANGUAGE_CODES, validate_language_code
 
-
-def _validate_language_code(v: Optional[str]) -> Optional[str]:
-    """Shared validator for preferred_receiving_language fields."""
-    if v is None:
-        return v
-    v = v.strip().lower()
-    if v not in SUPPORTED_LANGUAGE_CODES:
-        raise ValueError(
-            f"Unsupported language code '{v}'. "
-            f"Must be one of: {', '.join(sorted(SUPPORTED_LANGUAGE_CODES))}"
-        )
-    return v
+_validate_language_code = validate_language_code
 
 
 class UserBase(BaseModel):

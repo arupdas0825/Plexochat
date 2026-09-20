@@ -21,12 +21,13 @@ import {
   Lock,
   Search,
 } from "lucide-react";
-import { ChatThread, ChatUser } from "@/lib/mock-chat-data";
+import { ChatThread, ChatUser } from "@/lib/chat-types";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { useChat } from "@/lib/chat-context";
 import { useCall } from "@/lib/call-context";
 import { useConnections } from "@/lib/connections-context";
-import { SUPPORTED_LANGUAGES } from "@/lib/auth-context";
+import { useAuth, SUPPORTED_LANGUAGES } from "@/lib/auth-context";
+import { LANGUAGE_REGISTRY, getLanguageLabel } from "@/lib/languages/registry";
 
 interface ChatInfoPanelProps {
   thread: ChatThread;
@@ -52,8 +53,10 @@ export function ChatInfoPanel({
   const { startCall, callState } = useCall();
   const { connections, blockConnectionUser } = useConnections();
 
+  const { user } = useAuth();
   const [copiedId, setCopiedId] = useState(false);
   const [showTtlPicker, setShowTtlPicker] = useState(false);
+  const [showLangOverridePicker, setShowLangOverridePicker] = useState(false);
   const [confirmModal, setConfirmModal] = useState<"clear" | "delete" | "block" | null>(null);
   const [peerData, setPeerData] = useState<ChatUser>(thread.participant);
 
@@ -111,6 +114,14 @@ export function ChatInfoPanel({
     const found = DISAPPEARING_OPTIONS.find((o) => o.value === thread.disappearingTtl);
     return found ? found.label : `${Math.round(thread.disappearingTtl / 86400)} days`;
   }, [thread.disappearingTtl]);
+
+  const currentOverrideLabel = useMemo(() => {
+    if (!thread.perChatLanguageOverride) {
+      const defaultName = getLanguageLabel(user?.preferredReceivingLanguage || "en");
+      return `Default (${defaultName})`;
+    }
+    return getLanguageLabel(thread.perChatLanguageOverride);
+  }, [thread.perChatLanguageOverride, user?.preferredReceivingLanguage]);
 
   const receivingLangObj = useMemo(() => {
     return SUPPORTED_LANGUAGES.find(
@@ -384,6 +395,85 @@ export function ChatInfoPanel({
                 />
               </div>
             )}
+
+            {/* Per-Chat Translation Language Override */}
+            <div className="py-2.5">
+              <button
+                type="button"
+                onClick={() => setShowLangOverridePicker((prev) => !prev)}
+                className="w-full flex items-center justify-between text-left cursor-pointer group"
+              >
+                <div className="flex items-center gap-2.5">
+                  <Globe2 className="w-4 h-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs font-medium text-foreground">Chat language override</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      Override receiving language for this chat
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 text-xs text-muted-foreground font-medium">
+                  <span className="max-w-[110px] truncate">{currentOverrideLabel}</span>
+                  <ChevronRight
+                    className={`w-3.5 h-3.5 transition-transform ${showLangOverridePicker ? "rotate-90" : ""}`}
+                  />
+                </div>
+              </button>
+
+              <AnimatePresence>
+                {showLangOverridePicker && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden mt-2 pt-2 border-t border-border/40 max-h-48 overflow-y-auto space-y-1"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateThreadPreferences(thread.id, { per_chat_language_override: null });
+                        setShowLangOverridePicker(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
+                        !thread.perChatLanguageOverride
+                          ? "bg-primary/10 text-primary font-semibold"
+                          : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+                      }`}
+                    >
+                      <span>Default (Account Setting)</span>
+                      {!thread.perChatLanguageOverride && <Check className="w-3.5 h-3.5 text-primary" />}
+                    </button>
+                    {LANGUAGE_REGISTRY.map((lang) => {
+                      const isSelected =
+                        thread.perChatLanguageOverride?.toLowerCase() === lang.code.toLowerCase();
+                      return (
+                        <button
+                          key={`chat-lang-${lang.code}`}
+                          type="button"
+                          onClick={() => {
+                            updateThreadPreferences(thread.id, {
+                              per_chat_language_override: lang.code,
+                            });
+                            setShowLangOverridePicker(false);
+                          }}
+                          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
+                            isSelected
+                              ? "bg-primary/10 text-primary font-semibold"
+                              : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+                          }`}
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <span>{lang.flag}</span>
+                            <span>{lang.name}</span>
+                          </span>
+                          {isSelected && <Check className="w-3.5 h-3.5 text-primary" />}
+                        </button>
+                      );
+                    })}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
             {/* Disappearing Messages */}
             <div className="pt-2.5">
